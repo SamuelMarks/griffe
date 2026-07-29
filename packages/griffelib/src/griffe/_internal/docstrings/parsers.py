@@ -6,10 +6,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Literal
 
 from griffe._internal.docstrings.auto import AutoOptions, parse_auto
-from griffe._internal.docstrings.google import GoogleOptions, parse_google
+from griffe._internal.docstrings.cdd_parser import parse_cdd
 from griffe._internal.docstrings.models import DocstringSection, DocstringSectionText
-from griffe._internal.docstrings.numpy import NumpyOptions, parse_numpy
-from griffe._internal.docstrings.sphinx import SphinxOptions, parse_sphinx
 from griffe._internal.enumerations import Parser
 
 if TYPE_CHECKING:
@@ -18,17 +16,18 @@ if TYPE_CHECKING:
     from griffe._internal.models import Docstring
 
 
-DocstringStyle = Literal["google", "numpy", "sphinx", "auto"]
+DocstringStyle = Literal["google", "numpy", "sphinx", "rest", "auto"]
 """The supported docstring styles (literal values of the Parser enumeration)."""
-DocstringOptions = GoogleOptions | NumpyOptions | SphinxOptions | AutoOptions
+DocstringOptions = AutoOptions
 """The options for each docstring style."""
 
 
 parsers: dict[Parser, Callable[[Docstring], list[DocstringSection]]] = {
     Parser.auto: parse_auto,
-    Parser.google: parse_google,
-    Parser.sphinx: parse_sphinx,
-    Parser.numpy: parse_numpy,
+    Parser.google: parse_cdd,
+    Parser.sphinx: parse_cdd,
+    Parser.numpy: parse_cdd,
+    Parser.rest: parse_cdd,
 }
 
 

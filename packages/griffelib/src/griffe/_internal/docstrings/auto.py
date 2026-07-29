@@ -3,16 +3,13 @@
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING, Literal, TypedDict
+from typing import TYPE_CHECKING, Any, Literal, TypedDict
 
 from griffe._internal.enumerations import Parser
 
 if TYPE_CHECKING:
-    from griffe._internal.docstrings.google import GoogleOptions
     from griffe._internal.docstrings.models import DocstringSection
-    from griffe._internal.docstrings.numpy import NumpyOptions
     from griffe._internal.docstrings.parsers import DocstringStyle
-    from griffe._internal.docstrings.sphinx import SphinxOptions
     from griffe._internal.models import Docstring
 
 
@@ -110,11 +107,11 @@ _patterns = {
 class PerStyleOptions(TypedDict, total=False):
     """Per-style options for docstring parsing."""
 
-    google: GoogleOptions
+    google: dict[str, Any]
     """Options for Google-style docstrings."""
-    numpy: NumpyOptions
+    numpy: dict[str, Any]
     """Options for Numpy-style docstrings."""
-    sphinx: SphinxOptions
+    sphinx: dict[str, Any]
     """Options for Sphinx-style docstrings."""
 
 
@@ -225,5 +222,5 @@ def parse_auto(
         per_style_options=per_style_options,
     )
     if sections is None:
-        return parse(docstring, style, **per_style_options.get(style, {}))  # ty:ignore[no-matching-overload]
+        return parse(docstring, style, **per_style_options.get(style, {}))  # ty: ignore[no-matching-overload]
     return sections

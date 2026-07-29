@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from griffe._internal.docstrings import google, numpy, sphinx
+from griffe._internal.docstrings import cdd_parser
 from tests.test_docstrings.helpers import ParserType, parser
 
 if TYPE_CHECKING:
@@ -20,7 +20,7 @@ def parse_google() -> Iterator[ParserType]:
     Yields:
         A parser function.
     """
-    yield from parser(google)
+    yield from parser(cdd_parser)
 
 
 @pytest.fixture
@@ -30,7 +30,17 @@ def parse_numpy() -> Iterator[ParserType]:
     Yields:
         A parser function.
     """
-    yield from parser(numpy)
+    yield from parser(cdd_parser)
+
+
+@pytest.fixture
+def parse_rest() -> Iterator[ParserType]:
+    """Yield a function to parse ReST docstrings.
+
+    Yields:
+        A parser function.
+    """
+    yield from parser(cdd_parser)
 
 
 @pytest.fixture
@@ -40,4 +50,4 @@ def parse_sphinx() -> Iterator[ParserType]:
     Yields:
         A parser function.
     """
-    yield from parser(sphinx)
+    yield from parser(cdd_parser)

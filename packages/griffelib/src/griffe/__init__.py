@@ -89,9 +89,7 @@ Docstring parsers:
 
 - [`griffe.parse`][]: Parse the docstring.
 - [`griffe.parse_auto`][]: Parse a docstring by automatically detecting the style it uses.
-- [`griffe.parse_google`][]: Parse a Google-style docstring.
-- [`griffe.parse_numpy`][]: Parse a Numpydoc-style docstring.
-- [`griffe.parse_sphinx`][]: Parse a Sphinx-style docstring.
+- [`griffe.parse_cdd`][]: Parse a docstring using cdd-python.
 
 ## Exceptions
 
@@ -157,7 +155,11 @@ To test your Griffe extensions, or to load API data from code in memory, Griffe 
 from __future__ import annotations
 
 from griffe._internal.agents.inspector import Inspector, inspect
-from griffe._internal.agents.nodes.assignments import get_instance_names, get_name, get_names
+from griffe._internal.agents.nodes.assignments import (
+    get_instance_names,
+    get_name,
+    get_names,
+)
 from griffe._internal.agents.nodes.ast import (
     ast_children,
     ast_first_child,
@@ -175,7 +177,13 @@ from griffe._internal.agents.nodes.imports import relative_to_absolute
 from griffe._internal.agents.nodes.parameters import ParametersType, get_parameters
 from griffe._internal.agents.nodes.runtime import ObjectNode
 from griffe._internal.agents.nodes.values import get_value, safe_get_value
-from griffe._internal.agents.visitor import Visitor, builtin_decorators, stdlib_decorators, typing_overload, visit
+from griffe._internal.agents.visitor import (
+    Visitor,
+    builtin_decorators,
+    stdlib_decorators,
+    typing_overload,
+    visit,
+)
 from griffe._internal.c3linear import c3linear_merge
 from griffe._internal.collections import LinesCollection, ModulesCollection
 from griffe._internal.diff import (
@@ -201,7 +209,7 @@ from griffe._internal.docstrings.auto import (
     infer_docstring_style,
     parse_auto,
 )
-from griffe._internal.docstrings.google import GoogleOptions, parse_google
+from griffe._internal.docstrings.cdd_parser import parse_cdd
 from griffe._internal.docstrings.models import (
     DocstringAdmonition,
     DocstringAttribute,
@@ -238,15 +246,16 @@ from griffe._internal.docstrings.models import (
     DocstringWarn,
     DocstringYield,
 )
-from griffe._internal.docstrings.numpy import NumpyOptions, parse_numpy
 from griffe._internal.docstrings.parsers import (
     DocstringOptions,
     DocstringStyle,
     parse,
     parsers,
 )
-from griffe._internal.docstrings.sphinx import SphinxOptions, parse_sphinx
-from griffe._internal.docstrings.utils import docstring_warning, parse_docstring_annotation
+from griffe._internal.docstrings.utils import (
+    docstring_warning,
+    parse_docstring_annotation,
+)
 from griffe._internal.encoders import JSONEncoder, json_decoder
 from griffe._internal.enumerations import (
     BreakageKind,
@@ -277,6 +286,7 @@ from griffe._internal.exceptions import (
 from griffe._internal.expressions import (
     Expr,
     ExprAttribute,
+    ExprAwait,
     ExprBinOp,
     ExprBoolOp,
     ExprCall,
@@ -329,7 +339,13 @@ from griffe._internal.extensions.base import (
 )
 from griffe._internal.extensions.dataclasses import DataclassesExtension
 from griffe._internal.extensions.unpack_typeddict import UnpackTypedDictExtension
-from griffe._internal.finder import ModuleFinder, NamePartsAndPathType, NamePartsType, NamespacePackage, Package
+from griffe._internal.finder import (
+    ModuleFinder,
+    NamePartsAndPathType,
+    NamePartsType,
+    NamespacePackage,
+    Package,
+)
 from griffe._internal.git import GitInfo, KnownGitService
 from griffe._internal.helpers import (
     TmpPackage,
@@ -382,6 +398,7 @@ __all__ = [
     "AttributeChangedTypeBreakage",
     "AttributeChangedValueBreakage",
     "AutoOptions",
+
     "Breakage",
     "BreakageKind",
     "BuiltinModuleError",
@@ -433,6 +450,7 @@ __all__ = [
     "ExplanationStyle",
     "Expr",
     "ExprAttribute",
+    "ExprAwait",
     "ExprBinOp",
     "ExprBoolOp",
     "ExprCall",
@@ -473,7 +491,6 @@ __all__ = [
     "GetMembersMixin",
     "GitError",
     "GitInfo",
-    "GoogleOptions",
     "GriffeError",
     "GriffeLoader",
     "Inspector",
@@ -493,7 +510,6 @@ __all__ = [
     "NamePartsType",
     "NameResolutionError",
     "NamespacePackage",
-    "NumpyOptions",
     "Object",
     "ObjectAliasMixin",
     "ObjectChangedKindBreakage",
@@ -517,7 +533,6 @@ __all__ = [
     "RootNodeError",
     "SerializationMixin",
     "SetMembersMixin",
-    "SphinxOptions",
     "Stats",
     "TmpPackage",
     "TypeAlias",
@@ -569,10 +584,9 @@ __all__ = [
     "module_vtree",
     "parse",
     "parse_auto",
+    "parse_cdd",
+
     "parse_docstring_annotation",
-    "parse_google",
-    "parse_numpy",
-    "parse_sphinx",
     "parsers",
     "patch_loggers",
     "relative_to_absolute",
@@ -598,7 +612,7 @@ __all__ = [
 
 # Re-export griffecli for backward compatibility.
 try:
-    from griffecli import *  # noqa: F403
+    from griffecli import *
     from griffecli import __all__ as __cli_all__
 except ImportError:
     # Keep this in sync with the exported members of griffecli.

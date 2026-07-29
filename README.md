@@ -167,3 +167,16 @@ See the [Loading chapter](https://mkdocstrings.github.io/griffe/guide/users/load
 *And 4 more private sponsor(s).*
 
 <!-- sponsors-end -->
+## About this Fork (cdd-python integration)
+
+This repository is a fork of the original [mkdocstrings/griffe](https://github.com/mkdocstrings/griffe) project. 
+
+**Key Differences:**
+This fork replaces Griffe's native docstring parsing modules (`google`, `numpy`, and `sphinx`) with a unified wrapper around the external [`cdd-python`](https://github.com/offscale/cdd-python) library. 
+
+While `cdd-python` successfully translates docstrings into an Abstract Syntax Tree (AST), this integration introduces several strict limitations compared to upstream Griffe:
+- **Unsupported Sections:** `cdd-python` only extracts `Parameters` and `Returns` fields. Extended sections such as `Raises`, `Yields`, `Warns`, `Examples`, `Attributes`, and `Admonitions` are either merged into the generic description text or fail to parse correctly.
+- **Numpy Breakage:** Numpy docstring heuristics in `cdd-python` often misinterpret unknown sections as parameters.
+- **Lost Configuration:** Granular parser configurations available in upstream Griffe (e.g., `trim_doctest_flags`, `warn_unknown_params`) are ignored in this fork.
+
+For a comprehensive breakdown of these regressions, please refer to [LIMITATIONS_OF_CDD_PYTHON.md](./LIMITATIONS_OF_CDD_PYTHON.md).

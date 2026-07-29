@@ -8,7 +8,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from griffe import Module, check, load_git
+from griffe import Module, load_git
+from griffecli import check
 from tests import FIXTURES_DIR
 
 if TYPE_CHECKING:

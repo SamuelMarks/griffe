@@ -63,7 +63,7 @@ def parser(parser_module: ModuleType) -> Iterator[ParserType]:
         parser_module.docstring_warning = (  # ty:ignore[unresolved-attribute]
             lambda _docstring, _offset, message, log_level=LogLevel.warning: warnings.append(message)
         )
-        func_name = f"parse_{parser_module.__name__.split('.')[-1]}"
+        func_name = "parse_cdd"
         func = getattr(parser_module, func_name)
         sections = func(docstring_object, **parser_opts)
         return sections, warnings
