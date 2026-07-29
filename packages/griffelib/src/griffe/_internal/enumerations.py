@@ -160,6 +160,8 @@ class Parser(str, Enum):
     sphinx = "sphinx"
     """Sphinx-style docstrings parser."""
     numpy = "numpy"
+    rest = "rest"
+    """ReST-style docstrings parser."""
     """Numpydoc-style docstrings parser."""
 
 
