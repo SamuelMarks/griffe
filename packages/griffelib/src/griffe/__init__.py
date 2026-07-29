@@ -612,7 +612,7 @@ __all__ = [
 
 # Re-export griffecli for backward compatibility.
 try:
-    from griffecli import *
+    # from griffecli import *
     from griffecli import __all__ as __cli_all__
 except ImportError:
     # Keep this in sync with the exported members of griffecli.
