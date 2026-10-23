@@ -131,6 +131,7 @@ ci = [
     "mkdocs-redirects>=1.2",
     "mkdocstrings[python]>=0.29",
     "pydeps>=1.12",
+    "pymdown-extensions>=10.2,<12",
     # YORE: EOL 3.10: Remove line.
     "tomli>=2.0; python_version < '3.11'",
 ]

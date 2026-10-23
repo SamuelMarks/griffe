@@ -146,7 +146,7 @@ def setup() -> None:
     print("Installing dependencies (default environment)")
     default_venv = Path(".venv")
     if not default_venv.exists():
-        _shell("uv venv --python python")
+        _shell(f"uv venv --python {sys.executable}")
     _uv_install(default_venv)
 
     if PYTHON_VERSIONS:

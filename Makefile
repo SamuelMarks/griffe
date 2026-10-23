@@ -30,6 +30,8 @@ actions = \
 	test \
 	vscode
 
+PYTHON ?= $(shell command -v python || command -v python3)
+
 .PHONY: $(actions)
 $(actions):
-	@python scripts/make "$@"
+	@$(PYTHON) scripts/make "$@"
