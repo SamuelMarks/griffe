@@ -6,4 +6,4 @@ error-on-warning = true
 output-format = "concise"
 
 [environment]
-root = [".", "packages/griffelib/src", "packages/griffecli/src"]
+root = [".", "packages/griffelib/src", "packages/griffecli/src", "packages/griffelib"]

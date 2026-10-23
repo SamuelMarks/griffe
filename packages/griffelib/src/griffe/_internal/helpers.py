@@ -20,7 +20,7 @@ from griffe._internal.loader import load
 from griffe._internal.models import Module, Object
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Mapping, Sequence
+    from collections.abc import Generator, Mapping, Sequence
 
     from griffe._internal.collections import ModulesCollection
     from griffe._internal.docstrings.parsers import DocstringOptions, DocstringStyle
@@ -51,7 +51,7 @@ class TmpPackage:
 
 
 @contextmanager
-def temporary_pyfile(code: str, *, module_name: str = "module") -> Iterator[tuple[str, Path]]:
+def temporary_pyfile(code: str, *, module_name: str = "module") -> Generator[tuple[str, Path]]:
     """Create a Python file containing the given code in a temporary directory.
 
     Parameters:
@@ -75,7 +75,7 @@ def temporary_pypackage(
     *,
     init: bool = True,
     inits: bool = True,
-) -> Iterator[TmpPackage]:
+) -> Generator[TmpPackage]:
     """Create a package containing the given modules in a temporary directory.
 
     Parameters:
@@ -95,7 +95,7 @@ def temporary_pypackage(
     """
     modules = modules or {}
     if isinstance(modules, list):
-        modules = dict.fromkeys(modules, "")  # ty:ignore[invalid-assignment]
+        modules = dict.fromkeys(modules, "")
     mkdir_kwargs = {"parents": True, "exist_ok": True}
     with tempfile.TemporaryDirectory(prefix=_TMPDIR_PREFIX) as tmpdir:
         tmpdirpath = Path(tmpdir)
@@ -135,7 +135,7 @@ def temporary_visited_package(
     resolve_external: bool | None = None,
     resolve_implicit: bool = False,
     search_sys_path: bool = False,
-) -> Iterator[Module]:
+) -> Generator[Module]:
     """Create and visit a temporary package.
 
     Parameters:
@@ -203,7 +203,7 @@ def temporary_inspected_package(
     resolve_external: bool | None = None,
     resolve_implicit: bool = False,
     search_sys_path: bool = False,
-) -> Iterator[Module]:
+) -> Generator[Module]:
     """Create and inspect a temporary package.
 
     Parameters:
@@ -270,7 +270,7 @@ def temporary_visited_module(
     docstring_options: DocstringOptions | None = None,
     lines_collection: LinesCollection | None = None,
     modules_collection: ModulesCollection | None = None,
-) -> Iterator[Module]:
+) -> Generator[Module]:
     """Create and visit a temporary module with the given code.
 
     Parameters:
@@ -317,7 +317,7 @@ def temporary_inspected_module(
     docstring_options: DocstringOptions | None = None,
     lines_collection: LinesCollection | None = None,
     modules_collection: ModulesCollection | None = None,
-) -> Iterator[Module]:
+) -> Generator[Module]:
     """Create and inspect a temporary module with the given code.
 
     Parameters:

@@ -6,6 +6,8 @@
 
 ::: griffe.parse_auto
 
+::: griffe.parse_cdd
+
 ::: griffe.parse_google
 
 ::: griffe.parse_numpy
@@ -17,6 +19,8 @@
 ## **Parser options**
 
 ::: griffe.DocstringOptions
+
+::: griffe.CddOptions
 
 ::: griffe.GoogleOptions
 
@@ -33,6 +37,10 @@
 ::: griffe.Parser
 
 ::: griffe.parsers
+
+::: griffe.ir_param_to_griffe_param
+
+::: griffe.ir_to_griffe
 
 ::: griffe.parse_docstring_annotation
 

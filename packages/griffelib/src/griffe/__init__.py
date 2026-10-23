@@ -209,7 +209,18 @@ from griffe._internal.docstrings.auto import (
     infer_docstring_style,
     parse_auto,
 )
-from griffe._internal.docstrings.cdd_parser import parse_cdd
+from griffe._internal.docstrings.cdd_parser import (
+    CddOptions,
+    GoogleOptions,
+    NumpyOptions,
+    SphinxOptions,
+    ir_param_to_griffe_param,
+    ir_to_griffe,
+    parse_cdd,
+    parse_google,
+    parse_numpy,
+    parse_sphinx,
+)
 from griffe._internal.docstrings.models import (
     DocstringAdmonition,
     DocstringAttribute,
@@ -398,10 +409,10 @@ __all__ = [
     "AttributeChangedTypeBreakage",
     "AttributeChangedValueBreakage",
     "AutoOptions",
-
     "Breakage",
     "BreakageKind",
     "BuiltinModuleError",
+    "CddOptions",
     "Class",
     "ClassRemovedBaseBreakage",
     "CyclicAliasError",
@@ -491,6 +502,7 @@ __all__ = [
     "GetMembersMixin",
     "GitError",
     "GitInfo",
+    "GoogleOptions",
     "GriffeError",
     "GriffeLoader",
     "Inspector",
@@ -510,6 +522,7 @@ __all__ = [
     "NamePartsType",
     "NameResolutionError",
     "NamespacePackage",
+    "NumpyOptions",
     "Object",
     "ObjectAliasMixin",
     "ObjectChangedKindBreakage",
@@ -533,6 +546,7 @@ __all__ = [
     "RootNodeError",
     "SerializationMixin",
     "SetMembersMixin",
+    "SphinxOptions",
     "Stats",
     "TmpPackage",
     "TypeAlias",
@@ -574,6 +588,8 @@ __all__ = [
     "htree",
     "infer_docstring_style",
     "inspect",
+    "ir_param_to_griffe_param",
+    "ir_to_griffe",
     "json_decoder",
     "load",
     "load_extensions",
@@ -585,8 +601,10 @@ __all__ = [
     "parse",
     "parse_auto",
     "parse_cdd",
-
     "parse_docstring_annotation",
+    "parse_google",
+    "parse_numpy",
+    "parse_sphinx",
     "parsers",
     "patch_loggers",
     "relative_to_absolute",
@@ -612,7 +630,7 @@ __all__ = [
 
 # Re-export griffecli for backward compatibility.
 try:
-    # from griffecli import *
+    from griffecli import *  # noqa: F403
     from griffecli import __all__ as __cli_all__
 except ImportError:
     # Keep this in sync with the exported members of griffecli.
@@ -632,3 +650,4 @@ else:
     __all__ += __cli_all__  # noqa: PLE0605
     # Ignore any re-exported API in internal API tests.
     _REEXPORTED_EXTERNAL_API = set(__cli_all__)
+    del __cli_all__

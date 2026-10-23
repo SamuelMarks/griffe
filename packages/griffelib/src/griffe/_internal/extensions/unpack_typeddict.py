@@ -17,7 +17,7 @@ from griffe._internal.extensions.base import Extension
 from griffe._internal.models import Class, Docstring, Function, Parameter, Parameters
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Iterator
+    from collections.abc import Iterable, Iterator, Sequence
 
 
 class _TypedDictAttr(TypedDict):
@@ -108,8 +108,8 @@ def _get_or_set_attrs(cls: Class) -> tuple[list[_TypedDictAttr], list[_TypedDict
 
 def _update_docstring(
     func: Function,
-    required: Iterable[_TypedDictAttr],
-    optional: Iterable[_TypedDictAttr],
+    required: Sequence[_TypedDictAttr],
+    optional: Sequence[_TypedDictAttr],
     kwparam: Parameter | None = None,
 ) -> None:
     if not func.docstring:

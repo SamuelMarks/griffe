@@ -36,6 +36,8 @@
 
 ::: griffe.ExprAttribute
 
+::: griffe.ExprAwait
+
 ::: griffe.ExprBinOp
 
 ::: griffe.ExprBoolOp

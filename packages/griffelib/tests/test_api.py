@@ -24,7 +24,7 @@ _test_all_modules = pytest.mark.parametrize("tested_module", TESTED_MODULES)
 
 @pytest.fixture(name="inventory", scope="module")
 def _fixture_inventory() -> Inventory:
-    inventory_file = Path(__file__).parent.parent / "site" / "objects.inv"
+    inventory_file = Path(__file__).parent.parent.parent.parent / "site" / "objects.inv"
     if not inventory_file.exists():
         pytest.skip("The objects inventory is not available.")
     with inventory_file.open("rb") as file:

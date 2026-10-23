@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING, Any, Literal, TypedDict
+from typing import TYPE_CHECKING, Literal, TypedDict
 
 from griffe._internal.enumerations import Parser
 
 if TYPE_CHECKING:
+    from griffe._internal.docstrings.cdd_parser import CddOptions
     from griffe._internal.docstrings.models import DocstringSection
     from griffe._internal.docstrings.parsers import DocstringStyle
     from griffe._internal.models import Docstring
@@ -107,12 +108,14 @@ _patterns = {
 class PerStyleOptions(TypedDict, total=False):
     """Per-style options for docstring parsing."""
 
-    google: dict[str, Any]
+    google: CddOptions
     """Options for Google-style docstrings."""
-    numpy: dict[str, Any]
+    numpy: CddOptions
     """Options for Numpy-style docstrings."""
-    sphinx: dict[str, Any]
+    sphinx: CddOptions
     """Options for Sphinx-style docstrings."""
+    rest: CddOptions
+    """Options for ReST-style docstrings."""
 
 
 def infer_docstring_style(
@@ -167,9 +170,8 @@ def infer_docstring_style(
             style_sections[style] = parsers[style](docstring, **per_style_options.get(style, {}))
         style_lengths = {style: len(section) for style, section in style_sections.items()}
         max_sections = max(style_lengths.values())
-        for style in style_order:
-            if style_lengths[style] == max_sections:
-                return style, style_sections[style]
+        style = next(style for style in style_order if style_lengths[style] == max_sections)
+        return style, style_sections[style]
 
     raise ValueError(f"Invalid method '{method}'.")
 

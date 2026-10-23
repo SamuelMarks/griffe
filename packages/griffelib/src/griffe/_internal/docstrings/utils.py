@@ -30,6 +30,7 @@ def docstring_warning(
         docstring: The docstring object.
         offset: The offset in the docstring lines.
         message: The message to log.
+        log_level: The log level to use.
 
     Returns:
         A function used to log parsing warnings if `name` was passed, else none.
@@ -69,11 +70,10 @@ def parse_docstring_annotation(
         SyntaxError,  # Annotation contains syntax errors.
     ):
         code = compile(annotation, mode="eval", filename="", flags=PyCF_ONLY_AST, optimize=2)
-        if code.body:  # ty:ignore[unresolved-attribute]
-            name_or_expr = safe_get_annotation(
-                code.body,  # ty:ignore[unresolved-attribute]
-                parent=docstring.parent,  # ty:ignore[invalid-argument-type]
-                log_level=log_level,
-            )
-            return name_or_expr or annotation
+        name_or_expr = safe_get_annotation(
+            code.body,  # ty:ignore[unresolved-attribute]
+            parent=docstring.parent,  # ty:ignore[invalid-argument-type]
+            log_level=log_level,
+        )
+        return name_or_expr or annotation
     return annotation

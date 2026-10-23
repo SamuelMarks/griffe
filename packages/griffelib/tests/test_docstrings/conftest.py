@@ -7,10 +7,12 @@ from typing import TYPE_CHECKING
 import pytest
 
 from griffe._internal.docstrings import cdd_parser
-from tests.test_docstrings.helpers import ParserType, parser
+from tests.test_docstrings.helpers import parser
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
+
+    from tests.test_docstrings.helpers import ParserType
 
 
 @pytest.fixture

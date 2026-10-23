@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
+    from collections.abc import Callable, Generator
 
 
 PYTHON_VERSIONS = os.getenv("PYTHON_VERSIONS", "3.10 3.11 3.12 3.13 3.14 3.15").split()
@@ -30,7 +30,7 @@ def _shell(cmd: str, *, capture_output: bool = False, **kwargs: Any) -> str | No
 
 
 @contextmanager
-def _environ(**kwargs: str) -> Iterator[None]:
+def _environ(**kwargs: str) -> Generator[None]:
     original = dict(os.environ)
     os.environ.update(kwargs)
     try:

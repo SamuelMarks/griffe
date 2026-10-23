@@ -14,7 +14,7 @@ from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any, ClassVar
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
+    from collections.abc import Callable, Generator
 
 
 class Logger:
@@ -30,7 +30,7 @@ class Logger:
         return getattr(self._logger, name)
 
     @contextmanager
-    def disable(self) -> Iterator[None]:
+    def disable(self) -> Generator[None]:
         """Temporarily disable logging."""
         old_level = self._logger.level
         self._logger.setLevel(100)

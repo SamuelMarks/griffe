@@ -11,6 +11,7 @@ authors = [{name = "Timothée Mazzucotelli", email = "dev@pawamoy.fr"}]
 license = "ISC"
 license-files = ["LICENSE"]
 requires-python = ">=3.10"
+dependencies = ["python-cdd>=0.0.99rc46"]
 keywords = ["api", "signature", "breaking-changes", "static-analysis", "dynamic-analysis"]
 dynamic = ["version"]
 classifiers = [

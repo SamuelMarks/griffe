@@ -457,6 +457,12 @@ def test(ctx: Context, *cli_args: str) -> None:
     """
     os.environ["COVERAGE_FILE"] = f".coverage.{PY_VERSION}"
     os.environ["PYTHONWARNDEFAULTENCODING"] = "1"
+    griffelib_dir = str(Path("packages/griffelib").resolve())
+    if griffelib_dir not in sys.path:
+        sys.path.insert(0, griffelib_dir)
+    os.environ["PYTHONPATH"] = (
+        f"{griffelib_dir}{os.pathsep}{os.environ['PYTHONPATH']}" if "PYTHONPATH" in os.environ else griffelib_dir
+    )
     ctx.run(
         tools.pytest(
             rootdir=".",

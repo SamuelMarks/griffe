@@ -14,6 +14,7 @@ ignore = [
     "ANN401",  # Dynamically typed expressions (typing.Any) are disallowed
     "ARG005",  # Unused lambda argument
     "C901",  # Too complex
+    "CPY001",  # Missing copyright notice at top of file
     "D105",  # Missing docstring in magic method
     "D417",  # Missing argument description in the docstring
     "E501",  # Line too long
@@ -27,6 +28,7 @@ ignore = [
     "PLR0912",  # Too many branches
     "PLR0913",  # Too many arguments to function call
     "PLR0915",  # Too many statements
+    "PLR0917",  # Too many positional arguments
     "SLF001",  # Private member accessed
     "TD001",  # Invalid TODO tag: FIXME
     "TD002",  # Missing author in TODO

@@ -64,7 +64,7 @@ def test_unpack_support() -> None:
         def func(**kwargs: Unpack[Kwargs]) -> None:
             '''A function.
 
-            Parameters:
+            Args:
                 **kwargs: The keyword arguments.
             '''
             pass

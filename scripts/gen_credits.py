@@ -54,7 +54,11 @@ def _extra_marker(req: Requirement) -> str | None:
     if not req.marker:
         return None
     try:
-        return next(marker[2].value for marker in req.marker._markers if getattr(marker[0], "value", None) == "extra")
+        return next(
+            getattr(marker[2], "value", None)
+            for marker in req.marker._markers
+            if isinstance(marker, tuple) and getattr(marker[0], "value", None) == "extra"
+        )
     except StopIteration:
         return None
 

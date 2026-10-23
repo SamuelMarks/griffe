@@ -160,9 +160,9 @@ class Parser(str, Enum):
     sphinx = "sphinx"
     """Sphinx-style docstrings parser."""
     numpy = "numpy"
+    """Numpydoc-style docstrings parser."""
     rest = "rest"
     """ReST-style docstrings parser."""
-    """Numpydoc-style docstrings parser."""
 
 
 class ObjectKind(str, Enum):
