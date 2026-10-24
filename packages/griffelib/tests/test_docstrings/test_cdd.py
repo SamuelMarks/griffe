@@ -49,6 +49,13 @@ from griffe import (
     Function,
     Module,
     Parser,
+    emit_cdd,
+    emit_google,
+    emit_numpy,
+    emit_rest,
+    emit_sphinx,
+    griffe_param_to_ir_param,
+    griffe_to_ir,
     infer_docstring_style,
     ir_param_to_griffe_param,
     ir_to_griffe,
@@ -294,3 +301,69 @@ def test_docstring_models() -> None:
     assert Attribute is not None
     assert Class is not None
     assert Module is not None
+
+
+def test_griffe_to_ir_branches() -> None:
+    """Test all branches of `griffe_to_ir` and `griffe_param_to_ir_param`."""
+    assert griffe_to_ir([]) == {
+        "name": None,
+        "type": "static",
+        "doc": "",
+        "params": OrderedDict(),
+        "returns": None,
+    }
+
+    sections = [
+        DocstringSectionText(""),
+        DocstringSectionText("Summary line."),
+        DocstringSectionParameters(
+            [
+                DocstringParameter("x", description="X param", annotation="int", value="0"),
+                DocstringParameter("y", description="", annotation=None, value=None),
+            ],
+        ),
+        DocstringSectionReturns([DocstringReturn("", description="Return value", annotation="bool")]),
+        DocstringSectionRaises([DocstringRaise(description="err", annotation="ValueError")]),
+    ]
+    ir = griffe_to_ir(sections)
+    assert ir["doc"] == "Summary line."
+    assert ir["params"]["x"] == {"typ": "int", "doc": "X param", "default": "0"}
+    assert ir["params"]["y"] == {}
+    assert ir["returns"] is not None
+    assert ir["returns"]["return_type"] == {"typ": "bool", "doc": "Return value"}
+
+    param_only = griffe_param_to_ir_param([DocstringReturn("", description="Only desc")])
+    assert param_only["return_type"] == {"doc": "Only desc"}
+
+
+def test_emit_cdd() -> None:
+    """Test docstring emission via `emit_cdd`, `emit_google`, `emit_numpy`, `emit_sphinx`, and `emit_rest`."""
+    raw = """
+    A simple summary.
+
+    :param foo: A foo
+    :type foo: int
+    :param bar: A bar
+    :type bar: str
+    :return: Something
+    :rtype: bool
+    """
+    doc = Docstring(raw, parser="rest")
+    rest_out = emit_cdd(doc, docstring_format="rest")
+    assert ":param foo:" in rest_out
+    assert ":return:" in rest_out
+
+    sections = doc.parsed
+    google_out = emit_google(sections)
+    assert "Args:" in google_out
+    assert "foo (int):" in google_out
+    assert "Returns:" in google_out
+
+    numpy_out = emit_numpy(doc)
+    assert "Parameters" in numpy_out
+    assert "Returns" in numpy_out
+
+    sphinx_out = emit_sphinx(doc)
+    assert ":param foo:" in sphinx_out
+    assert emit_rest(doc) == sphinx_out
+

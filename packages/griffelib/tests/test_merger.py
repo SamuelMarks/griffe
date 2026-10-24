@@ -1,6 +1,24 @@
-"""Tests for the `merger` module."""
+# SPDX-License-Identifier: ISC
+#
+# Copyright (c) 2021, Timothée Mazzucotelli and contributors
+#
+# Permission to use, copy, modify, and/or distribute this software for any
+# purpose with or without fee is hereby granted, provided that the above
+# copyright notice and this permission notice appear in all copies.
+#
+# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+# ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+# ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+# OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+# Tests for the `merger` module.
 
 from __future__ import annotations
+
+import pytest
 
 from griffe import temporary_visited_package
 
@@ -95,3 +113,21 @@ def test_merge_overload_annotations() -> None:
         func = pkg["mod.func"]
         assert str(func.parameters["x"].annotation) == "int | float"
         assert str(func.returns) == "int | float"
+
+
+@pytest.mark.parametrize(
+    ("psd", "expected"),
+    [(True, "Stubs"), (False, "Source")],
+)
+def test_prefer_stubs_docstrings(psd: bool, expected: str) -> None:
+    """The "prefer stubs docstrings" option is respected."""
+    with temporary_visited_package(
+        "package",
+        {
+            "mod.py": "def func():\n    '''Source'''",
+            "mod.pyi": "def func():\n    '''Stubs'''",
+        },
+        prefer_stubs_docs=psd,
+    ) as pkg:
+        func = pkg["mod.func"]
+        assert func.docstring.value == expected

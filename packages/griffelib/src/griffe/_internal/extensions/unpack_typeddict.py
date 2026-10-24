@@ -1,3 +1,19 @@
+# SPDX-License-Identifier: ISC
+#
+# Copyright (c) 2021, Timothée Mazzucotelli and contributors
+#
+# Permission to use, copy, modify, and/or distribute this software for any
+# purpose with or without fee is hereby granted, provided that the above
+# copyright notice and this permission notice appear in all copies.
+#
+# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+# ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+# ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+# OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
 # TODO: Support `extra_items=type`.
 # TODO: Support `closed=True/False`.
 
@@ -129,7 +145,7 @@ def _update_docstring(
             params_section.value.pop(kwarg_pos)
 
     # If we have required parameters, add them to the "Parameters" section.
-    if required:
+    if required := list(required):
         # Create a "Parameters" section if none exists.
         if params_section is None:
             params_section = DocstringSectionParameters([])
@@ -147,7 +163,7 @@ def _update_docstring(
 
     # If we have optional parameters, add them to the "Parameters" section too,
     # with a default value of `...`.
-    if optional:
+    if optional := list(optional):
         # Create a "Parameters" section if none exists.
         if params_section is None:
             params_section = DocstringSectionParameters([])

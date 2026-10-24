@@ -14,7 +14,19 @@
 
 ::: griffe.parse_sphinx
 
+::: griffe.emit_cdd
+
+::: griffe.emit_google
+
+::: griffe.emit_numpy
+
+::: griffe.emit_rest
+
+::: griffe.emit_sphinx
+
 ::: griffe.DocstringStyle
+
+::: griffe.CddDocstringFormat
 
 ## **Parser options**
 
@@ -37,6 +49,10 @@
 ::: griffe.Parser
 
 ::: griffe.parsers
+
+::: griffe.griffe_param_to_ir_param
+
+::: griffe.griffe_to_ir
 
 ::: griffe.ir_param_to_griffe_param
 

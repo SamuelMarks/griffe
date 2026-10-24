@@ -93,6 +93,34 @@ By default it will search in the paths found in [`sys.path`][sys.path], which ca
 
 If Griffe cannot find sources for the specified object in the given search paths, it will try to import the specified object and use dynamic analysis on it (introspection). See [Forcing dynamic analysis](#forcing-dynamic-analysis) and [Disallowing dynamic analysis](#disallowing-dynamic-analysis).
 
+## Preferring stub docstrings
+
+When Griffe finds both a Python source file (`.py`) and its corresponding stub file (`.pyi`), it merges the information from both files. By default, a docstring from the source file takes precedence, and a docstring from the stub is only used when the matching object in the source has no docstring.
+
+If your stubs are the authoritative source of documentation, set `prefer_stubs_docs=True`. A docstring from a stub will then replace the corresponding source docstring. If the stub has no docstring, the source docstring is kept.
+
+=== "`load`"
+    ```python
+    import griffe
+
+    my_package = griffe.load("my_package", prefer_stubs_docs=True)
+    ```
+
+=== "`GriffeLoader`"
+    ```python
+    import griffe
+
+    loader = griffe.GriffeLoader(prefer_stubs_docs=True)
+    my_package = loader.load("my_package")
+    ```
+
+=== "CLI"
+    ```bash
+    griffe dump my_package --prefer-stubs-docstrings
+    ```
+
+The same Python option is available on [`load_git`][griffe.load_git] and [`load_pypi`][griffe.load_pypi], while the `-P`/`--prefer-stubs-docstrings` CLI flag is shared by the `dump` and `check` commands. The option only controls which docstring wins when source and stub data are merged. To search for a separately installed stubs-only package, also set `find_stubs_package=True` in Python or pass `-B`/`--find-stubs-packages` on the command line.
+
 ## Forcing dynamic analysis
 
 Griffe always tries first to find sources for the specified object. Then, unless told otherwise, it uses static analysis to load API data, i.e. it parses the sources and visits the AST (Abstract Syntax Tree) to extract information. If for some reason you want Griffe to use dynamic analysis instead (importing and inspecting runtime objects), you can pass the `force_inspection=True` argument:
@@ -116,6 +144,36 @@ Forcing inspection can be useful when your code is highly dynamic, and static an
 - if really needed, it's possible to [handle only a subset of objects with dynamic analysis](how-to/selectively-inspect.md), while the rest is loaded with static analysis, again thanks to Griffe extensions
 
 The [Extending](extending.md) topic will explain how to write and use extensions for Griffe.
+
+## Lazy module members
+
+Griffe's inspector uses [`inspect.getmembers`][inspect.getmembers], which calls `dir` to discover member names and `getattr` to retrieve their values. To expose lazy module members during inspection, define `__dir__` to include their names. Define `__getattr__` to return the corresponding objects. Defining `__getattr__` alone does not make these names discoverable.
+
+For example, this package imports `hello` only when the attribute is requested:
+
+```python title="my_package/__init__.py"
+__all__ = ["hello"]
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | set(__all__))
+
+
+def __getattr__(name: str) -> object:
+    if name == "hello":
+        from my_package._impl import hello
+
+        return hello
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+```
+
+```python title="my_package/_impl.py"
+def hello() -> str:
+    """Return a greeting."""
+    return "Hello!"
+```
+
+The `__all__` list marks `hello` as public. It does not expose lazy names to `dir` by itself. Here, `__dir__` includes both the module's existing names and its lazy public members.
 
 ## Disallowing dynamic analysis
 

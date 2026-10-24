@@ -1,4 +1,20 @@
-"""Test names and expressions methods."""
+# SPDX-License-Identifier: ISC
+#
+# Copyright (c) 2021, Timothée Mazzucotelli and contributors
+#
+# Permission to use, copy, modify, and/or distribute this software for any
+# purpose with or without fee is hereby granted, provided that the above
+# copyright notice and this permission notice appear in all copies.
+#
+# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+# ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+# ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+# OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+# Test names and expressions methods.
 
 from __future__ import annotations
 
@@ -7,7 +23,7 @@ import sys
 
 import pytest
 
-from griffe import ExprAwait, Module, Parser, get_expression, temporary_visited_module
+from griffe import ExprAwait, ExprKeyword, ExprName, Module, Parser, get_expression, temporary_visited_module
 from tests.test_nodes import syntax_examples
 
 
@@ -74,6 +90,152 @@ def test_resolving_full_names() -> None:
     ) as module:
         assert module["attribute1"].annotation.canonical_path == "package.module.Class"
         assert module["attribute2"].annotation.canonical_path == "package.module.Class"
+
+        assert module["attribute1"].annotation.reference_path == "package.module.Class"
+        assert module["attribute2"].annotation.reference_path == "package.module.Class"
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "int",
+        "list",
+        "len",
+        "property",
+        "ValueError",
+        "ExceptionGroup",
+        "PythonFinalizationError",
+        "ImportCycleError",
+        "frozendict",
+        "WindowsError",
+    ],
+)
+def test_resolving_builtin_names(name: str) -> None:
+    """Known builtins retain their bare canonical paths."""
+    with temporary_visited_module(f"attribute = {name}") as module:
+        expression = module["attribute"].value
+
+        assert expression.canonical_path == name
+        assert expression.reference_path == name
+
+
+def test_resolving_shadowed_builtin() -> None:
+    """Names in the current scope take precedence over builtins."""
+    with temporary_visited_module("class int: pass\nattribute: int") as module:
+        expression = module["attribute"].annotation
+
+        assert expression.canonical_path == "module.int"
+        assert expression.reference_path == "module.int"
+
+
+def test_injected_builtin_has_no_reference_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Custom additions to builtins are not standard cross-reference targets."""
+    monkeypatch.setattr("builtins.intro", "Some text", raising=False)
+
+    with temporary_visited_module("attribute = intro") as module:
+        expression = module["attribute"].value
+
+        assert expression.canonical_path == "intro"
+        assert expression.reference_path is None
+
+
+@pytest.mark.parametrize(
+    ("value", "canonical_path"),
+    [("intro", "intro"), ("intro.upper", "intro.upper"), ("intro.upper()", "intro.upper"), ("intro[0]", "intro")],
+)
+def test_unresolved_local_has_no_reference_path(value: str, canonical_path: str) -> None:
+    """Local variables must not become cross-reference targets."""
+    with temporary_visited_module(
+        f"""
+        class Class:
+            def __init__(self):
+                intro = "Some text"
+                self.attr = {value}
+        """,
+    ) as module:
+        expression = module["Class.attr"].value
+
+        # An unresolved root also prevents resolving its attributes and calls.
+        assert expression.reference_path is None
+        assert expression.canonical_path == canonical_path
+        assert str(expression) == value
+
+
+def test_unresolved_annotation() -> None:
+    """Unknown annotations keep their canonical paths without becoming reference targets."""
+    with temporary_visited_module("attribute: Unknown") as module:
+        expression = module["attribute"].annotation
+
+        assert expression.canonical_path == "Unknown"
+        assert expression.reference_path is None
+        assert expression.canonical_name == "Unknown"
+        assert not expression.is_type_parameter
+        assert str(expression.modernize()) == "Unknown"
+
+
+def test_unresolved_keyword_has_no_reference_path() -> None:
+    """Keywords cannot resolve through an unknown function."""
+    with temporary_visited_module("attribute = unknown(keyword=1)") as module:
+        keyword = module["attribute"].value.arguments[0]
+
+        assert keyword.canonical_path == "unknown(keyword)"
+        assert keyword.reference_path is None
+
+
+def test_resolving_keyword_reference_path() -> None:
+    """A keyword can reference a parameter when the called function is known."""
+    with temporary_visited_module("def function(*, keyword): pass\nattribute = function(keyword=1)") as module:
+        keyword = module["attribute"].value.arguments[0]
+
+        assert keyword.canonical_path == "module.function(keyword)"
+        assert keyword.reference_path == "module.function(keyword)"
+
+
+def test_keyword_without_function_has_no_reference_path() -> None:
+    """A standalone keyword has no parameter target without a function."""
+    keyword = ExprKeyword("keyword", "1")
+
+    assert keyword.canonical_path == "keyword=1"
+    assert keyword.reference_path is None
+
+
+@pytest.mark.parametrize("code", ["1 + 2", "[1, 2]", "int | str"])
+def test_composite_expression_has_no_reference_path(code: str) -> None:
+    """Composite expressions do not identify a single reference target."""
+    with temporary_visited_module(f"attribute = {code}") as module:
+        expression = module["attribute"].value
+
+        assert expression.canonical_path == code
+        assert expression.reference_path is None
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [("list[int]", "list"), ("'intro'[0]", None)],
+)
+def test_subscript_reference_path(value: str, expected: str | None) -> None:
+    """Subscripts reference their left-hand objects, while literal strings have no target."""
+    with temporary_visited_module(f"attribute = {value}") as module:
+        expression = module["attribute"].value
+
+        assert expression.reference_path == expected
+
+
+@pytest.mark.parametrize(("name", "expected"), [("int", "int"), ("Unknown", None)])
+def test_name_without_scope_reference_path(name: str, expected: str | None) -> None:
+    """Only known builtins can be referenced without a scope."""
+    expression = ExprName(name)
+
+    assert expression.canonical_path == name
+    assert expression.reference_path == expected
+
+
+def test_explicit_parent_reference_path() -> None:
+    """Explicit parent paths can provide reference targets without a scope."""
+    expression = ExprName("Class", parent="package")
+
+    assert expression.canonical_path == "package.Class"
+    assert expression.reference_path == "package.Class"
 
 
 @pytest.mark.parametrize("code", syntax_examples)
@@ -192,6 +354,104 @@ def test_expressions_stay_valid_and_equivalent(shape: str, context: str) -> None
     assert ast.dump(reparsed) == ast.dump(original), f"{code!r} rendered as {rendered!r}"
 
 
+def test_nested_container_format_spec_is_roundtrip_safe() -> None:
+    """Container replacement fields in format specs must preserve the source AST."""
+    code = "f'{value:{{1, 2}}}'"
+    original = ast.parse(code, mode="eval")
+    expression = get_expression(original.body, parent=Module("module"), parse_strings=False)
+    rendered = str(expression)
+    reparsed = ast.parse(rendered, mode="eval")
+    assert ast.dump(reparsed) == ast.dump(original), f"{code!r} rendered as {rendered!r}"
+
+
+@pytest.mark.parametrize("flat", [True, False])
+def test_standalone_named_expression_is_roundtrip_safe(flat: bool) -> None:
+    """Standalone named expressions must retain their required parentheses."""
+    code = "(value := 1)"
+    original = ast.parse(code, mode="eval")
+    expression = get_expression(original.body, parent=Module("module"), parse_strings=False)
+    assert expression is not None
+
+    rendered = str(expression)
+
+    # Both iteration modes must preserve the parentheses required by standalone walrus expressions.
+    assert "".join(str(element) for element in expression.iterate(flat=flat)) == rendered
+
+    reparsed = ast.parse(rendered, mode="eval")
+    assert ast.dump(reparsed) == ast.dump(original), f"{code!r} rendered as {rendered!r}"
+
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        "o[[(x, y)]]",
+        "o[f((x, y))]",
+        "o[[(x, y) for x in xs for y in ys]]",
+        "[(x, y) for [x, (y, z)] in values]",
+    ],
+)
+def test_nested_tuples_keep_parentheses_in_implicit_contexts(code: str) -> None:
+    """Implicit-tuple contexts must only affect the immediate tuple node."""
+    original = ast.parse(code, mode="eval")
+    expression = get_expression(original.body, parent=Module("module"), parse_strings=False)
+    rendered = str(expression)
+    reparsed = ast.parse(rendered, mode="eval")
+    assert ast.dump(reparsed) == ast.dump(original), f"{code!r} rendered as {rendered!r}"
+
+
+@pytest.mark.parametrize(
+    ("code", "expected"),
+    [
+        ("o[{(x, y)}]", "o[{(x, y)}]"),
+        ("o[{(x, y): value}]", "o[{(x, y): value}]"),
+        ("o[{(x, y): value for value in values}]", "o[{(x, y): value for value in values}]"),
+        ("o[{(x, y) for value in values}]", "o[{(x, y) for value in values}]"),
+        ("o[p[(x, y)]]", "o[p[x, y]]"),
+        ("o[p[(x, y):]]", "o[p[(x, y):]]"),
+        ("o[f(arg=(x, y))]", "o[f(arg=(x, y))]"),
+        ("o[((x, y)).attribute]", "o[(x, y).attribute]"),
+        ("o[(x, y) + z]", "o[(x, y) + z]"),
+        ("o[not (x, y)]", "o[not (x, y)]"),
+        ("o[(x, y) and z]", "o[(x, y) and z]"),
+        ("o[(x, y) == z]", "o[(x, y) == z]"),
+        ("o[(x, y) if condition else z]", "o[(x, y) if condition else z]"),
+        ("o[lambda: (x, y)]", "o[lambda: (x, y)]"),
+        ("o[(item := (x, y))]", "o[(item := (x, y))]"),
+        ("o[f'{(x, y)}']", "o[f'{(x, y)}']"),
+        ("o[((x, y) for value in values)]", "o[((x, y) for value in values)]"),
+        ("o[await (x, y)]", "o[await (x, y)]"),
+        ("[(x, y) for (x, (y, z)) in values]", "[(x, y) for x, (y, z) in values]"),
+    ],
+)
+def test_only_root_tuples_are_implicit_in_tuple_contexts(code: str, expected: str) -> None:
+    """Only a tuple at the root of a subscript slice or comprehension target is implicit."""
+    original = ast.parse(code, mode="eval")
+    expression = get_expression(original.body, parent=Module("module"), parse_strings=False)
+    rendered = str(expression)
+    assert rendered == expected
+    assert ast.dump(ast.parse(rendered, mode="eval")) == ast.dump(original)
+
+
+@pytest.mark.parametrize(
+    ("code", "expected"),
+    [
+        ('o["x, y"]', "o[x, y]"),
+        ('o["x,"]', "o[x,]"),
+        ('o["()"]', "o[()]"),
+        ('o[["x, y"]]', "o[[(x, y)]]"),
+        ('o[f("x, y")]', "o[f((x, y))]"),
+        ('o[p["x, y"]]', "o[p[x, y]]"),
+        ('o[p[["x, y"]]]', "o[p[[(x, y)]]]"),
+        ('typing.Literal["x, y"]', "typing.Literal['x, y']"),
+    ],
+)
+def test_parsed_string_tuples_respect_tuple_contexts(code: str, expected: str) -> None:
+    """Parsed strings inherit only their immediate tuple context."""
+    node = ast.parse(code, mode="eval")
+    expression = get_expression(node.body, parent=Module("module"), parse_strings=True)
+    assert str(expression) == expected
+
+
 def test_length_one_tuple_as_string() -> None:
     """Length-1 tuples must have a trailing comma."""
     code = "x = ('a',)"
@@ -283,6 +543,7 @@ def test_resolving_init_parameter() -> None:
         """,
     ) as module:
         assert module["Class.x"].value.canonical_path == "module.Class(x)"
+        assert module["Class.x"].value.reference_path == "module.Class(x)"
 
 
 @pytest.mark.parametrize(
@@ -335,6 +596,12 @@ def test_resolving_type_parameters() -> None:
 
         assert module["C.func"].parameters["arg1"].annotation.canonical_path == "module.C[T]"
         assert module["C.func"].parameters["arg2"].annotation.canonical_path == "Y"
+
+        assert module["C.D.func"].parameters["arg1"].annotation.reference_path == "module.C.D[T]"
+        assert module["C.D.func"].parameters["arg2"].annotation.reference_path == "module.C.D.func[Y]"
+        assert module["C.D.attr"].annotation.reference_path == "module.C.D[T]"
+        assert module["C.func"].parameters["arg1"].annotation.reference_path == "module.C[T]"
+        assert module["C.func"].parameters["arg2"].annotation.reference_path is None
 
 
 @pytest.mark.parametrize(

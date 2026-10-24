@@ -1,3 +1,19 @@
+# SPDX-License-Identifier: ISC
+#
+# Copyright (c) 2021, Timothée Mazzucotelli and contributors
+#
+# Permission to use, copy, modify, and/or distribute this software for any
+# purpose with or without fee is hereby granted, provided that the above
+# copyright notice and this permission notice appear in all copies.
+#
+# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+# ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+# ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+# OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
 # This top-level module imports all public names from the package,
 # and exposes them as public objects. We have tests to make sure
 # no object is forgotten in this list.
@@ -17,6 +33,8 @@ Actual logging messages are not part of the public API (they might change withou
 
 Raised exceptions throughout the package are part of the public API (you can rely on them).
 Their actual messages are not part of the public API (they might change without notice).
+The string representation of enumeration values is not part of the public API and might change without notice.
+Their `name` and `value` attributes are public and stable.
 
 The following paragraphs will help you discover the package's content.
 
@@ -90,6 +108,7 @@ Docstring parsers:
 - [`griffe.parse`][]: Parse the docstring.
 - [`griffe.parse_auto`][]: Parse a docstring by automatically detecting the style it uses.
 - [`griffe.parse_cdd`][]: Parse a docstring using cdd-python.
+- [`griffe.emit_cdd`][]: Emit a docstring using cdd-python.
 
 ## Exceptions
 
@@ -210,10 +229,18 @@ from griffe._internal.docstrings.auto import (
     parse_auto,
 )
 from griffe._internal.docstrings.cdd_parser import (
+    CddDocstringFormat,
     CddOptions,
     GoogleOptions,
     NumpyOptions,
     SphinxOptions,
+    emit_cdd,
+    emit_google,
+    emit_numpy,
+    emit_rest,
+    emit_sphinx,
+    griffe_param_to_ir_param,
+    griffe_to_ir,
     ir_param_to_griffe_param,
     ir_to_griffe,
     parse_cdd,
@@ -412,6 +439,7 @@ __all__ = [
     "Breakage",
     "BreakageKind",
     "BuiltinModuleError",
+    "CddDocstringFormat",
     "CddOptions",
     "Class",
     "ClassRemovedBaseBreakage",
@@ -571,6 +599,11 @@ __all__ = [
     "c3linear_merge",
     "docstring_warning",
     "dynamic_import",
+    "emit_cdd",
+    "emit_google",
+    "emit_numpy",
+    "emit_rest",
+    "emit_sphinx",
     "find_breaking_changes",
     "get__all__",
     "get_annotation",
@@ -585,6 +618,8 @@ __all__ = [
     "get_names",
     "get_parameters",
     "get_value",
+    "griffe_param_to_ir_param",
+    "griffe_to_ir",
     "htree",
     "infer_docstring_style",
     "inspect",

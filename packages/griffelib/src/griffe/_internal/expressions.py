@@ -1,3 +1,19 @@
+# SPDX-License-Identifier: ISC
+#
+# Copyright (c) 2021, Timothée Mazzucotelli and contributors
+#
+# Permission to use, copy, modify, and/or distribute this software for any
+# purpose with or without fee is hereby granted, provided that the above
+# copyright notice and this permission notice appear in all copies.
+#
+# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+# ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+# ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+# OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
 # This module contains the data classes that represent resolvable names and expressions.
 # First we declare data classes for each kind of expression, mostly corresponding to Python's AST nodes.
 # Then we declare builder methods, that iterate AST nodes and build the corresponding data classes,
@@ -11,7 +27,7 @@ import sys
 from dataclasses import dataclass
 from dataclasses import fields as getfields
 from enum import IntEnum, auto
-from functools import partial
+from functools import cache, partial
 from typing import TYPE_CHECKING, Any, Protocol
 
 from griffe._internal.agents.nodes.parameters import get_parameters
@@ -24,6 +40,170 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from griffe._internal.models import Class, Function, Module
+
+
+# Keep this list independent of the running Python version, platform, and additions to builtins.
+# Only known builtins can be cross-referenced without resolving them in a scope.
+_builtin_names = frozenset(
+    (
+        "False",
+        "None",
+        "True",
+        "__debug__",
+        "Ellipsis",
+        "NotImplemented",
+        "abs",
+        "aiter",
+        "all",
+        "anext",
+        "any",
+        "ascii",
+        "bin",
+        "bool",
+        "breakpoint",
+        "bytearray",
+        "bytes",
+        "callable",
+        "chr",
+        "classmethod",
+        "compile",
+        "complex",
+        "delattr",
+        "dict",
+        "dir",
+        "divmod",
+        "enumerate",
+        "eval",
+        "exec",
+        "filter",
+        "float",
+        "format",
+        "frozendict",
+        "frozenset",
+        "getattr",
+        "globals",
+        "hasattr",
+        "hash",
+        "hex",
+        "id",
+        "input",
+        "int",
+        "isinstance",
+        "issubclass",
+        "iter",
+        "len",
+        "list",
+        "locals",
+        "map",
+        "max",
+        "memoryview",
+        "min",
+        "next",
+        "object",
+        "oct",
+        "open",
+        "ord",
+        "pow",
+        "print",
+        "property",
+        "range",
+        "repr",
+        "reversed",
+        "round",
+        "sentinel",
+        "set",
+        "setattr",
+        "slice",
+        "sorted",
+        "staticmethod",
+        "str",
+        "sum",
+        "super",
+        "tuple",
+        "type",
+        "vars",
+        "zip",
+        "__import__",
+        "ArithmeticError",
+        "AssertionError",
+        "AttributeError",
+        "BaseException",
+        "BaseExceptionGroup",
+        "BlockingIOError",
+        "BrokenPipeError",
+        "BufferError",
+        "BytesWarning",
+        "ChildProcessError",
+        "ConnectionAbortedError",
+        "ConnectionError",
+        "ConnectionRefusedError",
+        "ConnectionResetError",
+        "DeprecationWarning",
+        "EOFError",
+        "EncodingWarning",
+        "EnvironmentError",
+        "Exception",
+        "ExceptionGroup",
+        "FileExistsError",
+        "FileNotFoundError",
+        "FloatingPointError",
+        "FutureWarning",
+        "GeneratorExit",
+        "IOError",
+        "ImportCycleError",
+        "ImportError",
+        "ImportWarning",
+        "IndentationError",
+        "IndexError",
+        "InterruptedError",
+        "IsADirectoryError",
+        "KeyError",
+        "KeyboardInterrupt",
+        "LookupError",
+        "MemoryError",
+        "ModuleNotFoundError",
+        "NameError",
+        "NotADirectoryError",
+        "NotImplementedError",
+        "OSError",
+        "OverflowError",
+        "PendingDeprecationWarning",
+        "PermissionError",
+        "ProcessLookupError",
+        "PythonFinalizationError",
+        "RecursionError",
+        "ReferenceError",
+        "ResourceWarning",
+        "RuntimeError",
+        "RuntimeWarning",
+        "StopAsyncIteration",
+        "StopIteration",
+        "SyntaxError",
+        "SyntaxWarning",
+        "SystemError",
+        "SystemExit",
+        "TabError",
+        "TimeoutError",
+        "TypeError",
+        "UnboundLocalError",
+        "UnicodeDecodeError",
+        "UnicodeEncodeError",
+        "UnicodeError",
+        "UnicodeTranslateError",
+        "UnicodeWarning",
+        "UserWarning",
+        "ValueError",
+        "Warning",
+        "WindowsError",
+        "ZeroDivisionError",
+        "copyright",
+        "credits",
+        "exit",
+        "help",
+        "license",
+        "quit",
+    ),
+)
 
 
 class _OperatorPrecedence(IntEnum):
@@ -42,7 +222,6 @@ class _OperatorPrecedence(IntEnum):
     NONE = auto()
 
     YIELD = auto()  # `yield`, `yield from`
-    ASSIGN = auto()  # `target := expr`
     STARRED = auto()  # `*expr` (omitted by Python docs, see ruff impl)
     LAMBDA = auto()
     IF_ELSE = auto()  # `expr if cond else expr`
@@ -141,11 +320,19 @@ def _field_as_dict(
     return element
 
 
+@cache
+def _serializable_expression_fields(expression_class: type[Expr]) -> tuple[str, ...]:
+    return tuple(
+        field.name
+        for field in sorted(getfields(expression_class), key=lambda field: field.name)
+        if field.name != "parent"
+    )
+
+
 def _expr_as_dict(expression: Expr, **kwargs: Any) -> dict[str, Any]:
     fields = {
-        field.name: _field_as_dict(getattr(expression, field.name), **kwargs)
-        for field in sorted(getfields(expression), key=lambda f: f.name)
-        if field.name != "parent"
+        field_name: _field_as_dict(getattr(expression, field_name), **kwargs)
+        for field_name in _serializable_expression_fields(type(expression))
     }
     fields["cls"] = expression.classname
     return fields
@@ -225,6 +412,16 @@ class Expr:
     def canonical_path(self) -> str:
         """Path of the expressed name/attribute."""
         return str(self)
+
+    @property
+    def reference_path(self) -> str | None:
+        """Cross-reference target, or `None` if no target can be determined.
+
+        Consumers should render plain text when this property returns `None`.
+        Unlike `canonical_path`, this property does not fall back to unresolved names.
+        Expressions that do not identify an object have no reference target.
+        """
+        return None
 
     @property
     def canonical_name(self) -> str:
@@ -325,6 +522,11 @@ class ExprAttribute(Expr):
         """The canonical path of this attribute."""
         return self.last.canonical_path
 
+    @property
+    def reference_path(self) -> str | None:
+        """Cross-reference target of this attribute, or `None` if its root is unresolved."""
+        return self.last.reference_path
+
 
 @dataclass(eq=True, slots=True)
 class ExprBinOp(Expr):
@@ -377,8 +579,13 @@ class ExprCall(Expr):
 
     @property
     def canonical_path(self) -> str:
-        """The canonical path of this subscript's left part."""
+        """The canonical path of the called function."""
         return self.function.canonical_path
+
+    @property
+    def reference_path(self) -> str | None:
+        """Cross-reference target of the called function, or `None` if unresolved."""
+        return self.function.reference_path
 
     def iterate(self, *, flat: bool = True) -> Iterator[str | Expr]:
         yield from _yield(self.function, flat=flat, outer_precedence=_get_precedence(self))
@@ -515,10 +722,11 @@ def _iterate_format_parts(
     format_spec: Sequence[str | Expr] | None,
     *,
     flat: bool = True,
+    separate_braces: bool = True,
 ) -> Iterator[str | Expr]:
     # Shared by `ExprFormatted` and `ExprInterpolation`.
     yield "{"
-    if str(value).startswith("{"):
+    if separate_braces and str(value).startswith("{"):
         # Separate braces, `{{` would be read as an escaped brace, e.g. `f"{ {1: 2}}"`.
         yield " "
     # Lambdas and walrus assignments need parentheses:
@@ -532,6 +740,16 @@ def _iterate_format_parts(
             if isinstance(part, str):
                 # Literal braces must be doubled, as in literal f-string parts.
                 yield part.replace("{", "{{").replace("}", "}}")
+            elif flat and isinstance(part, (ExprFormatted, ExprInterpolation)):
+                # Nested format fields already have their own braces; adding a separating
+                # space here changes the JoinedStr shape when their value starts with `{`.
+                yield from _iterate_format_parts(
+                    part.value,
+                    part.conversion,
+                    part.format_spec,
+                    flat=True,
+                    separate_braces=False,
+                )
             else:
                 yield from _yield(part, flat=flat, outer_precedence=_OperatorPrecedence.NONE)
     yield "}"
@@ -708,6 +926,14 @@ class ExprKeyword(Expr):
             return f"{self.function.canonical_path}({self.name})"
         return super(ExprKeyword, self).canonical_path
 
+    @property
+    def reference_path(self) -> str | None:
+        """Cross-reference target of the keyword's parameter, or `None` if its function is unresolved."""
+        if self.function:
+            path = self.function.reference_path
+            return f"{path}({self.name})" if path is not None else None
+        return None
+
     def iterate(self, *, flat: bool = True) -> Iterator[str | Expr]:
         yield self.name
         yield "="
@@ -867,6 +1093,26 @@ class ExprName(Expr):  # noqa: PLW1641
             return self.name
 
     @property
+    def reference_path(self) -> str | None:
+        """Resolved name or known builtin to cross-reference, or `None` if unknown.
+
+        Explicit parent paths are accepted as reference targets. Names without a
+        scope are accepted only when they are known builtins.
+        """
+        if self.parent is None:
+            return self.name if self.name in _builtin_names else None
+        if isinstance(self.parent, ExprName):
+            path = self.parent.reference_path
+            return f"{path}.{self.name}" if path is not None else None
+        if isinstance(self.parent, str):
+            return f"{self.parent}.{self.name}"
+        parent = self.parent.members.get(self.member, self.parent)
+        try:
+            return parent.resolve(self.name)
+        except NameResolutionError:
+            return self.name if self.name in _builtin_names else None
+
+    @property
     def resolved(self) -> Module | Class | None:
         """The resolved object this name refers to."""
         try:
@@ -918,10 +1164,12 @@ class ExprNamedExpr(Expr):
     """Value."""
 
     def iterate(self, *, flat: bool = True) -> Iterator[str | Expr]:
+        yield "("
         yield from _yield(self.target, flat=flat, outer_precedence=_OperatorPrecedence.NONE)
         yield " := "
-        # Nested walrus assignments and yields need parentheses, e.g. `a := (b := c)`.
+        # Yield expressions need parentheses on the right.
         yield from _yield(self.value, flat=flat, outer_precedence=_OperatorPrecedence.STARRED)
+        yield ")"
 
 
 @dataclass(eq=True, slots=True)
@@ -1031,6 +1279,13 @@ class ExprSubscript(Expr):
         if isinstance(self.left, str):
             return self.left
         return self.left.canonical_path
+
+    @property
+    def reference_path(self) -> str | None:
+        """Cross-reference target of this subscript's left part, or `None` if unresolved."""
+        if isinstance(self.left, str):
+            return None
+        return self.left.reference_path
 
 
 @dataclass(eq=True, slots=True)
@@ -1217,7 +1472,8 @@ _precedence_map = {
     ExprBoolOp: lambda e: {"and": _OperatorPrecedence.AND, "or": _OperatorPrecedence.OR}[e.operator],
     ExprCompare: lambda _: _OperatorPrecedence.COMP_MEMB_ID,
     ExprIfExp: lambda _: _OperatorPrecedence.IF_ELSE,
-    ExprNamedExpr: lambda _: _OperatorPrecedence.ASSIGN,
+    # Named expressions emit their own parentheses.
+    ExprNamedExpr: lambda _: _OperatorPrecedence.ATOMIC,
     ExprLambda: lambda _: _OperatorPrecedence.LAMBDA,
     ExprGeneratorExp: lambda _: _OperatorPrecedence.ATOMIC,
     ExprVarPositional: lambda _: _OperatorPrecedence.STARRED,
@@ -1288,9 +1544,17 @@ def _build_compare(node: ast.Compare, parent: Module | Class, **kwargs: Any) -> 
     )
 
 
+def _build_implicit_tuple(node: ast.AST, parent: Module | Class, **kwargs: Any) -> str | Expr:
+    expression = _build(node, parent, **kwargs)
+    # Empty tuples cannot be implicit: omitting their parentheses produces invalid Python.
+    if isinstance(expression, ExprTuple) and expression.elements:
+        expression.implicit = True
+    return expression
+
+
 def _build_comprehension(node: ast.comprehension, parent: Module | Class, **kwargs: Any) -> Expr:
     return ExprComprehension(
-        _build(node.target, parent, compr_target=True, **kwargs),
+        _build_implicit_tuple(node.target, parent, **kwargs),
         _build(node.iter, parent, **kwargs),
         [_build(condition, parent, **kwargs) for condition in node.ifs],
         is_async=bool(node.is_async),
@@ -1456,15 +1720,7 @@ def _build_setcomp(node: ast.SetComp, parent: Module | Class, **kwargs: Any) -> 
     return ExprSetComp(_build(node.elt, parent, **kwargs), [_build(gen, parent, **kwargs) for gen in node.generators])
 
 
-def _build_slice(
-    node: ast.Slice,
-    parent: Module | Class,
-    *,
-    subscript_slice: bool = False,  # noqa: ARG001
-    **kwargs: Any,
-) -> Expr:
-    # Note: `subscript_slice` is intentionally consumed here so that it doesn't propagate
-    # to the slice bounds, where tuples require their parentheses, e.g. `o[(1, 2):]`.
+def _build_slice(node: ast.Slice, parent: Module | Class, **kwargs: Any) -> Expr:
     return ExprSlice(
         None if node.lower is None else _build(node.lower, parent, **kwargs),
         None if node.upper is None else _build(node.upper, parent, **kwargs),
@@ -1482,7 +1738,6 @@ def _build_subscript(
     *,
     parse_strings: bool = False,
     literal_strings: bool = False,
-    subscript_slice: bool = False,  # noqa: ARG001
     **kwargs: Any,
 ) -> Expr:
     left = _build(node.value, parent, **kwargs)
@@ -1492,33 +1747,20 @@ def _build_subscript(
             "typing_extensions.Literal",
         }:
             literal_strings = True
-        slice_expr = _build(
+        slice_expr = _build_implicit_tuple(
             node.slice,
             parent,
             parse_strings=True,
             literal_strings=literal_strings,
-            subscript_slice=True,
             **kwargs,
         )
     else:
-        slice_expr = _build(node.slice, parent, subscript_slice=True, **kwargs)
+        slice_expr = _build_implicit_tuple(node.slice, parent, **kwargs)
     return ExprSubscript(left, slice_expr)
 
 
-def _build_tuple(
-    node: ast.Tuple,
-    parent: Module | Class,
-    *,
-    subscript_slice: bool = False,
-    compr_target: bool = False,
-    **kwargs: Any,
-) -> Expr:
-    # An empty tuple is always written as `()` and cannot be implicit.
-    # This arises in annotations like `tuple[()]`, where the AST represents
-    # the subscript slice as an empty Tuple node, but the parentheses must
-    # be preserved to produce valid Python (`tuple[]` is a SyntaxError).
-    implicit = (subscript_slice or compr_target) if node.elts else False
-    return ExprTuple([_build(el, parent, **kwargs) for el in node.elts], implicit=implicit)
+def _build_tuple(node: ast.Tuple, parent: Module | Class, **kwargs: Any) -> Expr:
+    return ExprTuple([_build(el, parent, **kwargs) for el in node.elts])
 
 
 def _build_unaryop(node: ast.UnaryOp, parent: Module | Class, **kwargs: Any) -> Expr:

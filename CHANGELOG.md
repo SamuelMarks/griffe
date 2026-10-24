@@ -5,6 +5,111 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 <!-- insertion marker -->
+## [2.4.1](https://github.com/mkdocstrings/griffe/releases/tag/2.4.1) - 2026-10-22
+
+<small>[Compare with 2.4.0](https://github.com/mkdocstrings/griffe/compare/2.4.0...2.4.1)</small>
+
+### Bug Fixes
+
+- Load symbols gated behing `__getattr__` during dynamic analysis ([3faeeb1](https://github.com/mkdocstrings/griffe/commit/3faeeb1b5fd8ec4b972d979b267c2322c1b644db) by Timothée Mazzucotelli).
+
+### Code Refactoring
+
+- Stop checking attribute values ([0670d03](https://github.com/mkdocstrings/griffe/commit/0670d038d5f58ab8267e041a7d349435b52f4c3b) by Timothée Mazzucotelli). [Issue-506](https://github.com/mkdocstrings/griffe/issues/506)
+
+## [2.4.0](https://github.com/mkdocstrings/griffe/releases/tag/2.4.0) - 2026-10-19
+
+<small>[Compare with 2.3.2](https://github.com/mkdocstrings/griffe/compare/2.3.2...2.4.0)</small>
+
+### Features
+
+- Expose `reference_path` in addition to `canonical_path` ([2f6b419](https://github.com/mkdocstrings/griffe/commit/2f6b4191b1987ec652404d6b44fabf93d81d84a4) by Timothée Mazzucotelli). [Issue-448](https://github.com/mkdocstrings/griffe/issues/448)
+
+### Bug Fixes
+
+- Preserve standalone named expression parentheses ([dc6300d](https://github.com/mkdocstrings/griffe/commit/dc6300d9450f0d35846486da4eca6d1527a754ac) by Alperen). [PR-488](https://github.com/mkdocstrings/griffe/pull/488), Co-authored-by: Timothée Mazzucotelli <dev@pawamoy.fr>
+- Propagate `public` value to inherited members (aliases) ([8b94205](https://github.com/mkdocstrings/griffe/commit/8b94205f2db13f02553aa8c1a28e47897e14edc9) by Timothée Mazzucotelli). [Issue-495](https://github.com/mkdocstrings/griffe/issues/495), [PR-503](https://github.com/mkdocstrings/griffe/pull/503), Co-authored-by: Sydney Duckworth <sydduckworth@users.noreply.github.com>
+
+### Performance Improvements
+
+- Prune function bodies from source before building AST ([657ce96](https://github.com/mkdocstrings/griffe/commit/657ce96a609a691aa85096506de22a0ec1b413b6) by Timothée Mazzucotelli). [PR-489](https://github.com/mkdocstrings/griffe/pull/489)
+
+    This requires the `griffe[faster]` extra. Griffe is fast by default so this performance improvement will only be noticeable in projects with *a lot of Python code*.
+
+## [2.3.2](https://github.com/mkdocstrings/griffe/releases/tag/2.3.2) - 2026-10-06
+
+<small>[Compare with 2.3.1](https://github.com/mkdocstrings/griffe/compare/2.3.1...2.3.2)</small>
+
+### Build
+
+- Drop support for Python 3.10 in griffelib and griffecli packages ([7c45a8f](https://github.com/mkdocstrings/griffe/commit/7c45a8f9785d085b38a2809d98d11faabfd5a5b5) by Timothée Mazzucotelli).
+
+## [2.3.1](https://github.com/mkdocstrings/griffe/releases/tag/2.3.1) - 2026-10-06
+
+<small>[Compare with 2.3.0](https://github.com/mkdocstrings/griffe/compare/2.3.0...2.3.1)</small>
+
+Enum values now inherit from `StrEnum`, so `str(member)` returns its value.
+
+### Build
+
+- Drop support for Python 3.10 ([686993d](https://github.com/mkdocstrings/griffe/commit/686993d4970d9fabbbd33334f88f48e1daed0565) by Timothée Mazzucotelli).
+
+### Bug Fixes
+
+- Exit gracefully when checking API and no tags are found ([7c898a9](https://github.com/mkdocstrings/griffe/commit/7c898a9685c8ac29e1a4fd7767e85bf830b75a58) by Timothée Mazzucotelli).
+
+## [2.3.0](https://github.com/mkdocstrings/griffe/releases/tag/2.3.0) - 2026-09-04
+
+<small>[Compare with 2.2.0](https://github.com/mkdocstrings/griffe/compare/2.2.0...2.3.0)</small>
+
+### Features
+
+- Add option to give precedence to docstrings in stubs vs. source ([09a2a13](https://github.com/mkdocstrings/griffe/commit/09a2a1323d1b4d022a4ce76a9f2839287b9c100e) by Timothée Mazzucotelli). [Issue-447](https://github.com/mkdocstrings/griffe/issues/447), [PR-481](https://github.com/mkdocstrings/griffe/pull/481)
+
+### Bug Fixes
+
+- Preserve nested tuple parentheses ([e095a7c](https://github.com/mkdocstrings/griffe/commit/e095a7cd4c239abd961f7899d7ddb17ea27caead) by Alperen). [PR-487](https://github.com/mkdocstrings/griffe/pull/487), Co-authored-by: Timothée Mazzucotelli <dev@pawamoy.fr>
+- Preserve nested f-string format specs ([38921b7](https://github.com/mkdocstrings/griffe/commit/38921b70e3dbba9a493aa5117f11a3a7883634cf) by Alperen). [PR-486](https://github.com/mkdocstrings/griffe/pull/486)
+- Disable all docstring warnings when passing `warnings=False` ([5cb0ae2](https://github.com/mkdocstrings/griffe/commit/5cb0ae2f00748288c4009c1d4b6ee19f6aca6b76) by Timothée Mazzucotelli).
+
+### Performance Improvements
+
+- Reuse computed parent in `is_imported` ([092ac31](https://github.com/mkdocstrings/griffe/commit/092ac3162e1477a4b62eb875365996998adbd77d) by Timothée Mazzucotelli).
+- Only build debug messages at debug level ([8f05a4a](https://github.com/mkdocstrings/griffe/commit/8f05a4ae5587d685bea1b0c98294a047b56c8df0) by Timothée Mazzucotelli).
+- Avoid creating new sets when handling labels ([06cd02e](https://github.com/mkdocstrings/griffe/commit/06cd02e63c240286d11450887cc01b0ef76d8908) by Timothée Mazzucotelli).
+- Maintain map of AST node type to visitor function ([e21851e](https://github.com/mkdocstrings/griffe/commit/e21851e732782823006223a7f5f8111b4200a257) by Timothée Mazzucotelli).
+- Avoid cyclic refs in ASTs to allow garbage-collecting them ([b968de0](https://github.com/mkdocstrings/griffe/commit/b968de091afc1a4fd241f457538433ce3ada7520) by Timothée Mazzucotelli).
+- Cache per-module path-related properties during serialization ([8bd6cc4](https://github.com/mkdocstrings/griffe/commit/8bd6cc4b34e96fc8235271cfa93a1a6a77091707) by Timothée Mazzucotelli).
+- Do not fire load events when no extension has hooked them ([0e2ae7c](https://github.com/mkdocstrings/griffe/commit/0e2ae7c8cd1563d6dcca7a6c37fb8f2ec072cb24) by Timothée Mazzucotelli).
+- Compute costly message lazily in alias resolution errors ([1e391b8](https://github.com/mkdocstrings/griffe/commit/1e391b8239747bb62908819e55468a961ffbaa99) by Timothée Mazzucotelli).
+- Avoid iterating many times over function parameters when merging stubs ([03cae74](https://github.com/mkdocstrings/griffe/commit/03cae743e02c56af7375ffbfa70d6acf02e5491d) by Timothée Mazzucotelli).
+- Avoid iterating many times over function parameters when diff'ing ([d3cf2c4](https://github.com/mkdocstrings/griffe/commit/d3cf2c41bb5f734e57b612b42d178e87af605ae8) by Timothée Mazzucotelli).
+- Improve efficiency of AST parameter extraction ([1e37cd4](https://github.com/mkdocstrings/griffe/commit/1e37cd488d6adf55065b3ce4e7932faf1ff7d186) by Timothée Mazzucotelli).
+- Cache serializable expression fields ([f9e48c1](https://github.com/mkdocstrings/griffe/commit/f9e48c16ebaeb719d5768cb921637aebe377a639) by Timothée Mazzucotelli).
+- Use maps to make JSON encoder faster ([b7de96f](https://github.com/mkdocstrings/griffe/commit/b7de96fb516218ae3bf6a8e6d014a223df67f4a3) by Timothée Mazzucotelli).
+- Avoid recomputing inherited members when diff'ing ([a29e028](https://github.com/mkdocstrings/griffe/commit/a29e028ff034752ff747dda17f3f875f22c2a192) by Timothée Mazzucotelli).
+- Make Google, Numpy and Sphinx docstring parsers faster ([7f39373](https://github.com/mkdocstrings/griffe/commit/7f39373f8da779fb104dd2b6c11a02d95da628c4) by Timothée Mazzucotelli).
+- Pre-compile patterns for docstring style detection ([ad58ad5](https://github.com/mkdocstrings/griffe/commit/ad58ad5b86390a8a02311189315dd4f59e0300a4) by Timothée Mazzucotelli).
+- LRU-cache parsing of type annotations in docstrings ([1671e59](https://github.com/mkdocstrings/griffe/commit/1671e59fb675e9b45338956ce8aa5f5e56692690) by Timothée Mazzucotelli).
+
+## [2.2.0](https://github.com/mkdocstrings/griffe/releases/tag/2.2.0) - 2026-08-16
+
+<small>[Compare with 2.1.0](https://github.com/mkdocstrings/griffe/compare/2.1.0...2.2.0)</small>
+
+### Features
+
+- Support `await` expressions ([6b3caab](https://github.com/mkdocstrings/griffe/commit/6b3caab7ce4fdcb1c9386937dad17510d35a3321) by Vincent Gao). [PR-479](https://github.com/mkdocstrings/griffe/pull/479)
+- Support unpacking in dict comprehensions ([2d39391](https://github.com/mkdocstrings/griffe/commit/2d39391cb135febadf339bdea91c1113b74da145) by mushitoriami). [PR-475](https://github.com/mkdocstrings/griffe/pull/475)
+
+### Bug Fixes
+
+- Forward `warn_missing_types` to Sphinx return section reader ([a15e782](https://github.com/mkdocstrings/griffe/commit/a15e782ed0793e06d22105beb016c10cfe0ed4b0) by Timothée Mazzucotelli). [Issue-mkdocstrings-python-337](https://github.com/mkdocstrings/python/issues/337)
+- Make stringified expressions valid and faithful Python ([eb85f0d](https://github.com/mkdocstrings/griffe/commit/eb85f0dd8bf49f4a2400bf03face646d8f533a7c) by Vincent Gao). [PR-478](https://github.com/mkdocstrings/griffe/pull/478)
+- Empty tuples can never be implicit ([82e728d](https://github.com/mkdocstrings/griffe/commit/82e728dc758f9635d2e500c13caa795b48e36d8a) by Vincent Gao). [PR-474](https://github.com/mkdocstrings/griffe/pull/474), Co-authored-by: Timothée Mazzucotelli <dev@pawamoy.fr>
+- Render f-strings and t-strings with correct quote delimiters ([90e28d4](https://github.com/mkdocstrings/griffe/commit/90e28d45ffc998434895c0f73af608cb12f0d6dd) by Bartosz Sławecki). [Issue-444](https://github.com/mkdocstrings/griffe/issues/444), [PR-455](https://github.com/mkdocstrings/griffe/pull/455)
+- Detect basic admonitions 'example', 'note' and 'warning' in Google/Numpy docstrings when inferring style ([f30306f](https://github.com/mkdocstrings/griffe/commit/f30306fa703741f976fc49576ddf95cf29ba998b) by Timothée Mazzucotelli).
+- Render dict `**`-unpacking as `**value` instead of `None: value` ([74ddbbf](https://github.com/mkdocstrings/griffe/commit/74ddbbf22f49e1fb789ac754e3fff41a0ac2f152) by Vincent Gao). [PR-467](https://github.com/mkdocstrings/griffe/pull/467)
+
 ## [2.1.0](https://github.com/mkdocstrings/griffe/releases/tag/2.1.0) - 2026-06-19
 
 <small>[Compare with 2.0.2](https://github.com/mkdocstrings/griffe/compare/2.0.2...2.1.0)</small>

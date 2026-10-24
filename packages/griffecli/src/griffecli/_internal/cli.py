@@ -1,3 +1,19 @@
+# SPDX-License-Identifier: ISC
+#
+# Copyright (c) 2021, Timothée Mazzucotelli and contributors
+#
+# Permission to use, copy, modify, and/or distribute this software for any
+# purpose with or without fee is hereby granted, provided that the above
+# copyright notice and this permission notice appear in all copies.
+#
+# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+# ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+# ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+# OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
 # This module contains all CLI-related things.
 # Why does this file exist, and why not put this in `__main__`?
 #
@@ -18,7 +34,7 @@ import logging
 import os
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import IO, TYPE_CHECKING, Any
 
@@ -75,6 +91,7 @@ def _load_packages(
     force_inspection: bool = False,
     store_source: bool = True,
     find_stubs_package: bool = False,
+    prefer_stubs_docs: bool = False,
 ) -> GriffeLoader:
     from griffe._internal.loader import GriffeLoader  # noqa: PLC0415
     from griffe._internal.logger import logger  # noqa: PLC0415
@@ -88,6 +105,7 @@ def _load_packages(
         allow_inspection=allow_inspection,
         force_inspection=force_inspection,
         store_source=store_source,
+        prefer_stubs_docs=prefer_stubs_docs,
     )
 
     # Load each package.
@@ -175,6 +193,14 @@ def get_parser() -> argparse.ArgumentParser:
             action="store_true",
             default=False,
             help="Whether to look for stubs-only packages and merge them with concrete ones.",
+        )
+        loading_options.add_argument(
+            "-P",
+            "--prefer-stubs-docstrings",
+            dest="prefer_stubs_docs",
+            action="store_true",
+            default=False,
+            help="Whether to prefer docstrings from stubs over those from sources.",
         )
         loading_options.add_argument(
             "-e",
@@ -342,6 +368,7 @@ def dump(
     resolve_external: bool | None = None,
     search_paths: Sequence[str | Path] | None = None,
     find_stubs_package: bool = False,
+    prefer_stubs_docs: bool = False,
     append_sys_path: bool = False,
     allow_inspection: bool = True,
     force_inspection: bool = False,
@@ -364,6 +391,7 @@ def dump(
         find_stubs_package: Whether to search for stubs-only packages.
             If both the package and its stubs are found, they'll be merged together.
             If only the stubs are found, they'll be used as the package itself.
+        prefer_stubs_docs: Whether to give precedence to docstrings from stubs over those from sources.
         append_sys_path: Whether to append the contents of `sys.path` to the search paths.
         allow_inspection: Whether to allow inspecting modules when visiting them is not possible.
         force_inspection: Whether to force using dynamic analysis when loading data.
@@ -406,11 +434,12 @@ def dump(
         force_inspection=force_inspection,
         store_source=False,
         find_stubs_package=find_stubs_package,
+        prefer_stubs_docs=prefer_stubs_docs,
     )
     data_packages = loader.modules_collection.members
 
     # Serialize and dump packages.
-    started = datetime.now(tz=timezone.utc)
+    started = datetime.now(tz=UTC)
     if per_package_output:
         for package_name, data in data_packages.items():
             serialized = data.as_json(indent=2, full=full, sort_keys=True)
@@ -418,7 +447,7 @@ def dump(
     else:
         serialized = json.dumps(data_packages, cls=JSONEncoder, indent=2, full=full, sort_keys=True)
         _print_data(serialized, output)
-    elapsed = datetime.now(tz=timezone.utc) - started
+    elapsed = datetime.now(tz=UTC) - started
 
     if stats:
         loader_stats = loader.stats()
@@ -438,6 +467,7 @@ def check(
     search_paths: Sequence[str | Path] | None = None,
     append_sys_path: bool = False,
     find_stubs_package: bool = False,
+    prefer_stubs_docs: bool = False,
     allow_inspection: bool = True,
     force_inspection: bool = False,
     verbose: bool = False,
@@ -454,6 +484,8 @@ def check(
         extensions: The extensions to use.
         search_paths: The paths to search into.
         append_sys_path: Whether to append the contents of `sys.path` to the search paths.
+        find_stubs_package: Whether to search for stubs-only packages.
+        prefer_stubs_docs: Whether to give precedence to docstrings from stubs over those from sources.
         allow_inspection: Whether to allow inspecting modules when visiting them is not possible.
         force_inspection: Whether to force using dynamic analysis when loading data.
         verbose: Use a verbose output.
@@ -493,6 +525,7 @@ def check(
             allow_inspection=allow_inspection,
             force_inspection=force_inspection,
             find_stubs_package=find_stubs_package,
+            prefer_stubs_docs=prefer_stubs_docs,
             resolve_aliases=True,
             resolve_external=None,
         )
@@ -514,6 +547,7 @@ def check(
             allow_inspection=allow_inspection,
             force_inspection=force_inspection,
             find_stubs_package=find_stubs_package,
+            prefer_stubs_docs=prefer_stubs_docs,
             resolve_aliases=True,
             resolve_external=None,
         )
@@ -527,6 +561,10 @@ def check(
             print(f"griffe: error: {error}", file=sys.stderr)
             return 2
 
+        if not against:
+            print("griffe: info: 'against' ref not specified and no tags found", file=sys.stderr)
+            return 0
+
         # Load old and new version of the package.
         old_package = load_git(
             against_path,
@@ -537,6 +575,7 @@ def check(
             allow_inspection=allow_inspection,
             force_inspection=force_inspection,
             find_stubs_package=find_stubs_package,
+            prefer_stubs_docs=prefer_stubs_docs,
             resolve_aliases=True,
             resolve_external=None,
         )
@@ -551,6 +590,7 @@ def check(
                 allow_inspection=allow_inspection,
                 force_inspection=force_inspection,
                 find_stubs_package=find_stubs_package,
+                prefer_stubs_docs=prefer_stubs_docs,
                 resolve_aliases=True,
                 resolve_external=None,
             )
@@ -563,6 +603,7 @@ def check(
                 allow_inspection=allow_inspection,
                 force_inspection=force_inspection,
                 find_stubs_package=find_stubs_package,
+                prefer_stubs_docs=prefer_stubs_docs,
                 resolve_aliases=True,
                 resolve_external=None,
             )

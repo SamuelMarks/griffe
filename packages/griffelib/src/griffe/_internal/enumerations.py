@@ -1,11 +1,27 @@
+# SPDX-License-Identifier: ISC
+#
+# Copyright (c) 2021, Timothée Mazzucotelli and contributors
+#
+# Permission to use, copy, modify, and/or distribute this software for any
+# purpose with or without fee is hereby granted, provided that the above
+# copyright notice and this permission notice appear in all copies.
+#
+# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+# ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+# ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+# OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
 # This module contains all the enumerations of the package.
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 
-class LogLevel(str, Enum):
+class LogLevel(StrEnum):
     """Enumeration of available log levels."""
 
     trace = "trace"
@@ -24,7 +40,7 @@ class LogLevel(str, Enum):
     """The CRITICAL log level."""
 
 
-class DocstringSectionKind(str, Enum):
+class DocstringSectionKind(StrEnum):
     """Enumeration of the possible docstring section kinds."""
 
     text = "text"
@@ -63,7 +79,7 @@ class DocstringSectionKind(str, Enum):
     """Admonition block."""
 
 
-class ParameterKind(str, Enum):
+class ParameterKind(StrEnum):
     """Enumeration of the different parameter kinds."""
 
     positional_only = "positional-only"
@@ -78,7 +94,7 @@ class ParameterKind(str, Enum):
     """Variadic keyword parameter."""
 
 
-class TypeParameterKind(str, Enum):
+class TypeParameterKind(StrEnum):
     """Enumeration of the different type parameter kinds."""
 
     type_var = "type-var"
@@ -89,7 +105,7 @@ class TypeParameterKind(str, Enum):
     """Parameter specification variable."""
 
 
-class Kind(str, Enum):
+class Kind(StrEnum):
     """Enumeration of the different object kinds."""
 
     MODULE = "module"
@@ -106,7 +122,7 @@ class Kind(str, Enum):
     """Type aliases."""
 
 
-class ExplanationStyle(str, Enum):
+class ExplanationStyle(StrEnum):
     """Enumeration of the possible styles for explanations."""
 
     ONE_LINE = "oneline"
@@ -121,36 +137,38 @@ class ExplanationStyle(str, Enum):
     """Explanations as Azure DevOps / Azure Pipelines logging commands."""
 
 
-class BreakageKind(str, Enum):
+class BreakageKind(StrEnum):
     """Enumeration of the possible API breakages."""
 
     PARAMETER_MOVED = "Positional parameter was moved"
-    """Positional parameter was moved"""
+    """Positional parameter was moved."""
     PARAMETER_REMOVED = "Parameter was removed"
-    """Parameter was removed"""
+    """Parameter was removed."""
     PARAMETER_CHANGED_KIND = "Parameter kind was changed"
-    """Parameter kind was changed"""
+    """Parameter kind was changed."""
     PARAMETER_CHANGED_DEFAULT = "Parameter default was changed"
-    """Parameter default was changed"""
+    """Parameter default was changed."""
     PARAMETER_CHANGED_REQUIRED = "Parameter is now required"
-    """Parameter is now required"""
+    """Parameter is now required."""
     PARAMETER_ADDED_REQUIRED = "Parameter was added as required"
-    """Parameter was added as required"""
+    """Parameter was added as required."""
     RETURN_CHANGED_TYPE = "Return types are incompatible"
-    """Return types are incompatible"""
+    """Return types are incompatible."""
     OBJECT_REMOVED = "Public object was removed"
-    """Public object was removed"""
+    """Public object was removed."""
     OBJECT_CHANGED_KIND = "Public object points to a different kind of object"
-    """Public object points to a different kind of object"""
+    """Public object points to a different kind of object."""
     ATTRIBUTE_CHANGED_TYPE = "Attribute types are incompatible"
-    """Attribute types are incompatible"""
-    ATTRIBUTE_CHANGED_VALUE = "Attribute value was changed"
-    """Attribute value was changed"""
+    """Attribute types are incompatible."""
     CLASS_REMOVED_BASE = "Base class was removed"
-    """Base class was removed"""
+    """Base class was removed."""
+
+    # YORE: Bump 3: Remove block.
+    ATTRIBUTE_CHANGED_VALUE = "Attribute value was changed"
+    """Attribute value was changed."""
 
 
-class Parser(str, Enum):
+class Parser(StrEnum):
     """Enumeration of the different docstring parsers."""
 
     auto = "auto"
@@ -165,7 +183,7 @@ class Parser(str, Enum):
     """ReST-style docstrings parser."""
 
 
-class ObjectKind(str, Enum):
+class ObjectKind(StrEnum):
     """Enumeration of the different runtime object kinds."""
 
     MODULE = "module"
