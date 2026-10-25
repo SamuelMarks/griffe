@@ -43,8 +43,6 @@ if TYPE_CHECKING:
     import ast
     from collections.abc import Generator
 
-    from griffe import Attribute, Class, Function, Object, ObjectNode, TypeAlias
-
 
 PACKAGE_ROOT = Path(__file__).parent.parent.parent
 
@@ -343,3 +341,103 @@ def test_load_events() -> None:
         "on_type_alias",
     ]
     assert set(events) == set(extension.records)
+
+
+def test_extension_base_methods_and_loading_errors(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test base `Extension` no-op methods and `load_extensions` error handling."""
+    import ast  # noqa: PLC0415
+
+    from griffe._internal.agents.inspector import Inspector  # noqa: PLC0415
+    from griffe._internal.agents.visitor import Visitor  # noqa: PLC0415
+    from griffe._internal.exceptions import ExtensionNotLoadedError  # noqa: PLC0415
+    from griffe._internal.extensions import base as base_mod  # noqa: PLC0415
+
+    ext = Extension()
+    mod = Module("m")
+    cls = Class("C", parent=mod)
+    fn = Function("f", parent=mod)
+    attr = Attribute("a", parent=mod)
+    ta = TypeAlias("TA", parent=mod)
+    alias = Alias("al", "m.a", parent=mod)
+    loader = GriffeLoader()
+    agent = Visitor("m", None, "", None, None, None)  # ty:ignore[invalid-argument-type]
+    tree = ast.parse("x = 1\ny = 2")
+    node = ast.Pass()
+
+    ext.generic_visit(tree)
+
+    class DummyParentMod:
+        pass
+
+    parent_on = ObjectNode(DummyParentMod(), "parent")
+    child_on = ObjectNode(1, "child", parent=parent_on)
+    alias_on = ObjectNode(2, "alias_child", parent=parent_on)
+    monkeypatch.setattr(ObjectNode, "children", property(lambda _self: [child_on, alias_on]))
+    monkeypatch.setattr(ObjectNode, "alias_target_path", property(lambda self: "other.x" if self is alias_on else None))
+    ext.generic_inspect(parent_on)
+    monkeypatch.undo()
+
+    ext.on_node(node=node, agent=agent)
+    ext.on_instance(node=node, obj=mod, agent=agent)
+    ext.on_members(node=node, obj=mod, agent=agent)
+    ext.on_module_node(node=node, agent=agent)
+    ext.on_module_instance(node=node, mod=mod, agent=agent)
+    ext.on_module_members(node=node, mod=mod, agent=agent)
+    ext.on_class_node(node=node, agent=agent)
+    ext.on_class_instance(node=node, cls=cls, agent=agent)
+    ext.on_class_members(node=node, cls=cls, agent=agent)
+    ext.on_function_node(node=node, agent=agent)
+    ext.on_function_instance(node=node, func=fn, agent=agent)
+    ext.on_attribute_node(node=node, agent=agent)
+    ext.on_attribute_instance(node=node, attr=attr, agent=agent)
+    ext.on_type_alias_node(node=node, agent=agent)
+    ext.on_type_alias_instance(node=node, type_alias=ta, agent=agent)
+    ext.on_alias_instance(node=node, alias=alias, agent=agent)
+    setattr(ext, "__old_on_alias", True)
+    ext.on_alias_instance(node=node, alias=alias, agent=agent, loader=loader)
+    ext.on_package(pkg=mod, loader=loader)
+    ext.on_object(obj=mod, loader=loader)
+    ext.on_module(mod=mod, loader=loader)
+    ext.on_class(cls=cls, loader=loader)
+    ext.on_function(func=fn, loader=loader)
+    ext.on_attribute(attr=attr, loader=loader)
+    ext.on_type_alias(type_alias=ta, loader=loader)
+    ext.on_alias(alias=alias, loader=loader)
+
+    exts_container = Extensions(ext)
+    exts_container.call("nonexistent_hook_event")
+
+    # load_extensions with empty call (loads built-in dataclasses) and idempotency
+    exts = load_extensions()
+    assert len(exts._extensions) == 1
+    exts2 = load_extensions("dataclasses")
+    assert len(exts2._extensions) == 1
+
+    # _load_extension_path when spec_from_file_location returns None
+    monkeypatch.setattr(base_mod, "spec_from_file_location", lambda *_a, **_kw: None)
+    with pytest.raises(ExtensionNotLoadedError, match="Could not import module from path"):
+        base_mod._load_extension_path("dummy.py")
+    monkeypatch.undo()
+
+    # Existing file that raises ImportError during exec_module
+    imp_err_file = tmp_path / "imp_err_ext.py"
+    imp_err_file.write_text("import nonexistent_dep_xyz_999\n", encoding="utf8")
+    with pytest.raises(ExtensionNotLoadedError, match="could not be found"):
+        load_extensions(str(imp_err_file))
+
+    # Missing file (treated as dotted path -> ImportError)
+    with pytest.raises(ExtensionNotLoadedError, match="Error while importing extension"):
+        load_extensions(str(tmp_path / "nonexistent_ext_file.py"))
+
+    # File with missing attribute
+    empty_file = tmp_path / "empty_ext.py"
+    empty_file.write_text("x = 1\n", encoding="utf8")
+    with pytest.raises(ExtensionNotLoadedError, match="has no 'MissingExt' attribute"):
+        load_extensions(f"{empty_file}:MissingExt")
+
+    # ModuleNotFoundError from dynamic_import
+    monkeypatch.setattr(base_mod, "dynamic_import", lambda _p: (_ for _ in ()).throw(ModuleNotFoundError("no mod")))
+    with pytest.raises(ExtensionNotLoadedError, match="could not be found"):
+        load_extensions("missing_mod")
+    monkeypatch.undo()
+    assert Inspector is not None

@@ -41,7 +41,7 @@ from contextlib import suppress
 from dataclasses import dataclass
 from itertools import chain
 from pathlib import Path
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, ClassVar, cast
 
 from griffe._internal.exceptions import UnhandledEditableModuleError
 from griffe._internal.logger import logger
@@ -237,8 +237,8 @@ class ModuleFinder:
         if package and stubs:
             if isinstance(package, Package) and isinstance(stubs, Package):
                 package.stubs = stubs.path
-            elif isinstance(package, NamespacePackage) and isinstance(stubs, NamespacePackage):
-                package.path += stubs.path
+            else:
+                cast("NamespacePackage", package).path += cast("NamespacePackage", stubs).path
             return module_name, package
 
         # Return either one.

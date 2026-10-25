@@ -267,3 +267,60 @@ def test_readonly_fields() -> None:
     assert init.parameters["b"].docstring.value == "Docstring for b."
     assert init.parameters["c"].docstring.value == "Docstring for c."
     assert init.returns == "None"
+
+
+def test_unpack_typeddict_edge_cases() -> None:
+    """Test `UnpackTypedDictExtension` edge cases (Annotated, total=True, invalid total, manual __init__)."""
+    code = """
+        from typing import Annotated, TypedDict, Unpack
+        from typing_extensions import NotRequired, ReadOnly
+
+        SOME_VAR = True
+
+        class RegularBase:
+            pass
+
+        class NotATypedDict(RegularBase):
+            pass
+
+        class TDTotalTrue(RegularBase, TypedDict, other=1, total=True):
+            req: int
+
+        class TDNonBoolTotal(TypedDict, total="not_a_bool"):
+            field1: NotRequired[ReadOnly[int]]
+            field2: list[int]
+
+        class TDInvalidTotal(TypedDict, total=SOME_VAR):
+            opt_or_req: int
+
+        class TDManualInit(TypedDict):
+            x: int
+            def __init__(self, x: int) -> None:
+                pass
+
+        class TDOnlyOptional(TypedDict, total=False):
+            opt: str
+
+        def fn_annotated(a: int, **kwargs: Annotated[Unpack[TDTotalTrue], "meta"]) -> None:
+            '''Doc.
+
+            Args:
+                a: First arg (not kwargs).
+            '''
+
+        def fn_no_doc(**kwargs: Unpack[TDOnlyOptional]) -> None:
+            pass
+
+        def fn_regular_kwargs(**kwargs: int) -> None:
+            pass
+    """
+    with temporary_visited_package(
+        "pkg",
+        {"__init__.py": code},
+        extensions=load_extensions("unpack_typeddict"),
+        docstring_parser="google",
+    ) as pkg:
+        assert "req" in pkg["fn_annotated"].parameters
+        assert "opt" in pkg["fn_no_doc"].parameters
+        assert "kwargs" in pkg["fn_regular_kwargs"].parameters
+        assert "x" not in pkg["TDManualInit"].members

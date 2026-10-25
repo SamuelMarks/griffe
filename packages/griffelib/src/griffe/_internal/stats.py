@@ -92,9 +92,9 @@ class Stats:
             return
         self.by_kind[root.kind] += 1
         if root.is_module:
-            if isinstance(root.filepath, Path):
-                self.modules_by_extension[root.filepath.suffix] += 1
-            elif root.filepath is None:
+            if isinstance(root._filepath, Path):  # ty:ignore[unresolved-attribute]
+                self.modules_by_extension[root._filepath.suffix] += 1  # ty:ignore[unresolved-attribute]
+            elif root._filepath is None:  # ty:ignore[unresolved-attribute]
                 self.modules_by_extension[""] += 1
         for member in root.members.values():
             self._itercount(member)

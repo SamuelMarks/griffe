@@ -89,7 +89,7 @@ def test_annotations_from_types_before_314(annotation: str, expected: str) -> No
         ("int | Literal[1]", "int | typing.Literal[1]"),
     ],
 )
-def test_annotations_from_types(annotation: str, expected: str) -> None:
+def test_annotations_from_types(annotation: str, expected: str) -> None:  # pragma: no cover
     """Assert annotations are correctly converted to string."""
     with temporary_inspected_module(
         f"""
@@ -119,21 +119,15 @@ def test_class_level_imports() -> None:
 
 def test_missing_dependency() -> None:
     """Assert missing dependencies are handled during dynamic imports."""
-    with (
-        pytest.raises(ImportError, match="ModuleNotFoundError: No module named 'missing'"),
-        temporary_inspected_module("import missing"),
-    ):
-        pass
+    with pytest.raises(ImportError, match="ModuleNotFoundError: No module named 'missing'"):
+        temporary_inspected_module("import missing").__enter__()
 
 
 def test_inspect_properties_as_attributes() -> None:
     """Assert properties are created as attributes and not functions."""
     with temporary_inspected_module(
         """
-        try:
-            from functools import cached_property
-        except ImportError:
-            from cached_property import cached_property
+        from functools import cached_property
 
         class C:
             @property
@@ -423,3 +417,222 @@ def test_inspecting_pep695_generics() -> None:
         assert type_alias.type_parameters[0].default.name == "str"
         assert isinstance(type_alias.value, Expr)
         assert str(type_alias.value) == "dict[str, T]"
+
+
+def test_inspector_and_runtime_node_edge_cases(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test Inspector and ObjectNode edge cases (docstrings, linenos, dynamic submodules, descriptors, annotations)."""
+    import inspect as py_inspect  # noqa: PLC0415
+    import types  # noqa: PLC0415
+    import typing  # noqa: PLC0415
+    from pathlib import Path  # noqa: PLC0415
+    from tempfile import gettempdir  # noqa: PLC0415
+
+    from griffe._internal.agents import inspector as inspector_mod  # noqa: PLC0415
+    from griffe._internal.agents.nodes.runtime import ObjectNode  # noqa: PLC0415
+    from griffe._internal.collections import LinesCollection  # noqa: PLC0415
+    from griffe._internal.enumerations import ObjectKind  # noqa: PLC0415
+    from griffe._internal.extensions.base import Extensions  # noqa: PLC0415
+    from griffe._internal.helpers import _TMPDIR_PREFIX  # noqa: PLC0415
+    from griffe._internal.models import Module  # noqa: PLC0415
+    from tests.helpers import clear_sys_modules  # noqa: PLC0415
+
+    # Test clear_sys_modules(None)
+    fake_tmp_prefix = str(Path(gettempdir()) / f"{_TMPDIR_PREFIX}fake_mod")
+    fake_m1 = types.ModuleType("_fake_tmp_mod_1")
+    fake_m1.__file__ = f"{fake_tmp_prefix}/mod.py"
+    fake_m2 = types.ModuleType("_fake_tmp_mod_2")
+    fake_m2.__path__ = [f"{fake_tmp_prefix}/pkg"]
+    sys.modules["_fake_tmp_mod_1"] = fake_m1
+    sys.modules["_fake_tmp_mod_2"] = fake_m2
+    clear_sys_modules(None)
+    assert "_fake_tmp_mod_1" not in sys.modules
+    assert "_fake_tmp_mod_2" not in sys.modules
+
+    # ObjectNode unwrap exception, repr, path, module error
+    class BadUnwrap:
+        @property
+        def __wrapped__(self) -> object:
+            raise RuntimeError("unwrap error")
+
+    node_bad_unwrap = ObjectNode(BadUnwrap(), "bad")
+    assert repr(node_bad_unwrap) == "ObjectNode(name='bad')"
+    assert node_bad_unwrap.path == "bad"
+    with pytest.raises(ValueError, match="does not have a parent module"):
+        _ = node_bad_unwrap.module
+
+    # ObjectNode.module_path edge cases
+    mod_root = types.ModuleType("root_m")
+    mod_root.__name__ = "root_m"
+    mod_node = ObjectNode(mod_root, "root_m")
+
+    # 1. Object without __module__ where getmodule raises ValueError
+    node_val_err = ObjectNode(42, "num", parent=mod_node)
+    monkeypatch.setattr(py_inspect, "getmodule", lambda _o: (_ for _ in ()).throw(ValueError("bad")))
+    assert node_val_err.module_path is None
+    monkeypatch.undo()
+
+    # 2. Object without __module__ where getmodule returns None and parent module has __spec__.name vs only __name__
+    mod_with_spec = types.ModuleType("spec_m")
+    mod_with_spec.__spec__ = types.SimpleNamespace(name="spec_m_name")  # ty:ignore[invalid-assignment]
+    node_spec_parent = ObjectNode(mod_with_spec, "spec_m")
+    monkeypatch.setattr(py_inspect, "getmodule", lambda _o: None)
+    assert ObjectNode(object(), "child", parent=node_spec_parent).module_path == "spec_m_name"
+
+    mod_no_spec = types.ModuleType("no_spec_m")
+    delattr(mod_no_spec, "__spec__")
+    node_no_spec_parent = ObjectNode(mod_no_spec, "no_spec_m")
+    assert ObjectNode(object(), "child", parent=node_no_spec_parent).module_path == "no_spec_m"
+    monkeypatch.undo()
+
+    # 3. Object with __module__ set to a ModuleType or an invalid int
+    class ModAsModule:
+        __module__ = mod_root  # ty:ignore[invalid-assignment]
+
+    class ModAsInt:
+        __module__ = 123  # ty:ignore[invalid-assignment]
+
+    assert ObjectNode(ModAsModule, "ModAsModule", parent=mod_node).module_path == "root_m"
+    assert ObjectNode(ModAsInt, "ModAsInt", parent=mod_node).module_path is None
+
+    # ObjectNode kind / descriptor / method / staticmethod / classmethod edge cases
+    class WithMethods:
+        def regular_method(self) -> None:
+            return None
+
+        @staticmethod
+        def sm() -> None:
+            return None
+
+        @classmethod
+        def cm(cls) -> None:
+            return None
+
+    WithMethods().regular_method()
+    WithMethods.sm()
+    WithMethods.cm()
+
+    cls_node = ObjectNode(WithMethods, "WithMethods", parent=mod_node)
+    assert ObjectNode(WithMethods.regular_method, "regular_method", parent=cls_node).kind is ObjectKind.METHOD
+    assert ObjectNode(WithMethods.sm, "sm", parent=cls_node).kind is ObjectKind.STATICMETHOD
+    assert ObjectNode(WithMethods.cm, "cm", parent=cls_node).kind is ObjectKind.CLASSMETHOD
+    assert ObjectNode(int.__dict__["real"], "real", parent=cls_node).kind is ObjectKind.GETSET_DESCRIPTOR
+    assert ObjectNode(str.split, "split", parent=cls_node).kind is ObjectKind.METHOD_DESCRIPTOR
+    assert ObjectNode([].append, "append", parent=cls_node).kind is ObjectKind.BUILTIN_METHOD
+    assert not ObjectNode(WithMethods.sm, "sm", parent=None).is_staticmethod
+    assert not ObjectNode(WithMethods.cm, "cm", parent=None).is_classmethod
+
+    # Parent whose obj has no __dict__ (e.g. int instance forced as class parent)
+    no_dict_parent = ObjectNode(1, "one")
+    assert not ObjectNode(WithMethods.sm, "sm", parent=no_dict_parent).is_staticmethod
+    assert not ObjectNode(WithMethods.cm, "cm", parent=no_dict_parent).is_classmethod
+
+    # alias_target_path edge cases
+    assert node_bad_unwrap.alias_target_path is None  # parent is None
+    assert ObjectNode(ModAsInt, "ModAsInt", parent=mod_node).alias_target_path is None  # child_module_path is None
+    bad_parent_mod = ObjectNode(ModAsInt, "BadParent")
+    assert (
+        ObjectNode(WithMethods, "WithMethods", parent=bad_parent_mod).alias_target_path is None
+    )  # parent_module_path is None
+    os_mod = types.ModuleType("os")
+    posix_mod = types.ModuleType("posix")
+    os_node = ObjectNode(os_mod, "os")
+    assert ObjectNode(posix_mod, "posix", parent=os_node).alias_target_path is None  # cyclic relationship
+    other_sub = types.ModuleType("other_pkg.sub")
+    assert ObjectNode(other_sub, "sub", parent=mod_node).alias_target_path == "other_pkg.sub"
+
+    # Inspector._get_docstring and _get_linenos edge cases
+    class BadDoc:
+        @property
+        def __doc__(self) -> str:
+            raise RuntimeError("doc error")
+
+    class NonStrDoc:
+        __doc__ = 12345  # ty:ignore[invalid-assignment]
+
+    lc = LinesCollection()
+    fpath = Path("fake_insp.py")
+    lc[fpath] = ["def f():\n", "    pass\n"]
+    insp = inspector_mod.Inspector("fake_insp", filepath=fpath, extensions=Extensions(), lines_collection=lc)
+    assert insp._get_docstring(ObjectNode(BadDoc(), "bd")) is None
+    assert insp._get_docstring(ObjectNode(NonStrDoc(), "nsd")) is None
+    assert insp._get_linenos(ObjectNode(42, "num")) == (None, None)
+    assert insp._get_linenos(ObjectNode(WithMethods.regular_method, "regular_method"))[0] is not None
+
+    # Inspector.get_module with parent and __init__.py filepath, and generic_inspect with in-memory submodule
+    parent_griffe_mod = Module("pkg_p", filepath=fpath.parent / "__init__.py")
+    sub_insp = inspector_mod.Inspector(
+        "sub_m",
+        filepath=fpath.parent / "pkg_p" / "sub_m" / "__init__.py",
+        extensions=Extensions(),
+        parent=parent_griffe_mod,
+    )
+    in_mem_mod = types.ModuleType("pkg_p.sub_m")
+    in_mem_child = types.ModuleType("pkg_p.sub_m.mem_child")
+    # Ensure in_mem_child has no __file__, and another child has __file__
+    disk_child = types.ModuleType("pkg_p.sub_m.disk_child")
+    disk_child.__file__ = "disk_child.py"
+    in_mem_mod.mem_child = in_mem_child  # ty:ignore[unresolved-attribute]
+    in_mem_mod.disk_child = disk_child  # ty:ignore[unresolved-attribute]
+
+    class BadRepr:
+        def __repr__(self) -> str:
+            raise RuntimeError("bad repr")
+
+    import asyncio  # noqa: PLC0415
+
+    my_coro = asyncio.sleep
+    in_mem_mod.bad_repr = BadRepr()  # ty:ignore[unresolved-attribute]
+    in_mem_mod.my_coro = my_coro  # ty:ignore[unresolved-attribute]
+    in_mem_mod.b_func = len  # ty:ignore[unresolved-attribute]
+    in_mem_mod.__all__ = ["my_coro"]  # ty:ignore[unresolved-attribute]
+
+    class ClsWithSpecials:
+        sm = staticmethod(lambda: None)
+        cm = classmethod(lambda cls: None)
+        md = str.split
+        bm = [].append
+        gs = int.__dict__["real"]
+
+    ClsWithSpecials.__module__ = "pkg_p.sub_m"
+    in_mem_mod.ClsWithSpecials = ClsWithSpecials  # ty:ignore[unresolved-attribute]
+
+    monkeypatch.setattr(inspector_mod, "dynamic_import", lambda *_a, **_kw: in_mem_mod)
+    res_mod = sub_insp.get_module(import_paths=[])
+    sub_insp.inspect_builtin_function(ObjectNode(len, "b_func_direct", parent=mod_node))
+    sub_insp.inspect_builtin_method(ObjectNode([].append, "b_meth_direct", parent=cls_node))
+    sub_insp.inspect_method_descriptor(ObjectNode(str.split, "m_desc_direct", parent=cls_node))
+    sub_insp.inspect_staticmethod(ObjectNode(WithMethods.sm, "sm_direct", parent=cls_node))
+    sub_insp.inspect_classmethod(ObjectNode(WithMethods.cm, "cm_direct", parent=cls_node))
+    sub_insp.inspect_method(ObjectNode(WithMethods().regular_method, "m_direct", parent=cls_node))
+    sub_insp.inspect_coroutine(ObjectNode(my_coro, "coro_direct", parent=mod_node))
+    assert "mem_child" in res_mod.members
+    assert "disk_child" not in res_mod.members
+    assert res_mod["bad_repr"].value is None
+    assert "async" in res_mod["coro_direct"].labels
+    assert "builtin" in res_mod["b_func_direct"].labels
+    assert "builtin" in res_mod["b_meth_direct"].labels
+    assert "method descriptor" in res_mod["m_desc_direct"].labels
+    assert res_mod.exports == ["my_coro"]
+    monkeypatch.undo()
+
+    # _convert_object_to_annotation and _convert_type_to_annotation edge cases
+    class NoNameRepr:
+        def __repr__(self) -> str:
+            return "int"
+
+    class BadSyntaxRepr:
+        def __repr__(self) -> str:
+            return "def invalid syntax"
+
+    assert inspector_mod._convert_object_to_annotation("int", parent=res_mod) is not None
+    assert inspector_mod._convert_object_to_annotation(NoNameRepr(), parent=res_mod) is not None
+    bad_syn = BadSyntaxRepr()
+    assert inspector_mod._convert_object_to_annotation(bad_syn, parent=res_mod) is bad_syn
+    assert inspector_mod._convert_type_to_annotation(int | str, parent=res_mod) is not None
+
+    orig_get_origin = typing.get_origin
+    monkeypatch.setattr(typing, "get_origin", lambda o: "bad_origin" if o == list[int] else orig_get_origin(o))
+    monkeypatch.setattr(
+        inspector_mod, "_convert_object_to_annotation", lambda o, **_kw: None if o == "bad_origin" else "int"
+    )
+    assert inspector_mod._convert_type_to_annotation(list[int], parent=res_mod) is None

@@ -30,12 +30,12 @@ from griffe._internal.agents.visitor import Visitor, visit
 
 
 class _NodeExtension(Extension):
-    def on_function_node(self, **kwargs: Any) -> None:
+    def on_function_node(self, **kwargs: Any) -> None:  # pragma: no cover
         pass
 
 
 class _PostLoadExtension(Extension):
-    def on_function(self, **kwargs: Any) -> None:
+    def on_function(self, **kwargs: Any) -> None:  # pragma: no cover
         pass
 
 
@@ -69,7 +69,7 @@ def test_native_parser_is_skipped_without_functions(monkeypatch: pytest.MonkeyPa
     """Avoid paying for a second parse when no implementation suite can be removed."""
     calls = 0
 
-    def prune(code: str) -> str:
+    def prune(code: str) -> str:  # pragma: no cover
         nonlocal calls
         calls += 1
         return code
@@ -84,7 +84,7 @@ def test_native_parser_is_skipped_for_stub_files(monkeypatch: pytest.MonkeyPatch
     """Avoid pruning stub files, whose function bodies contain no implementations."""
     calls = 0
 
-    def prune(code: str) -> str:
+    def prune(code: str) -> str:  # pragma: no cover
         nonlocal calls
         calls += 1
         return code
@@ -99,7 +99,7 @@ def test_node_aware_hooks_force_cpython_fallback(monkeypatch: pytest.MonkeyPatch
     """Keep complete CPython nodes available to visit-time extension callbacks."""
     calls = 0
 
-    def prune(code: str) -> str:
+    def prune(code: str) -> str:  # pragma: no cover
         nonlocal calls
         calls += 1
         return code
@@ -114,7 +114,7 @@ def test_custom_visitors_can_disable_native_pruning(monkeypatch: pytest.MonkeyPa
     """Keep the complete tree available to Visitor subclasses with custom traversal."""
     calls = 0
 
-    def prune(code: str) -> str:
+    def prune(code: str) -> str:  # pragma: no cover
         nonlocal calls
         calls += 1
         return code

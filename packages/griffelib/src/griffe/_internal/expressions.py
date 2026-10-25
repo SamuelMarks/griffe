@@ -28,7 +28,7 @@ from dataclasses import dataclass
 from dataclasses import fields as getfields
 from enum import IntEnum, auto
 from functools import cache, partial
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any
 
 from griffe._internal.agents.nodes.parameters import get_parameters
 from griffe._internal.enumerations import LogLevel, ParameterKind
@@ -38,8 +38,12 @@ from griffe._internal.logger import logger
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Sequence
     from pathlib import Path
+    from typing import Protocol
 
     from griffe._internal.models import Class, Function, Module
+
+    class _BuildCallable(Protocol):
+        def __call__(self, node: Any, parent: Module | Class, **kwargs: Any) -> Expr: ...
 
 
 # Keep this list independent of the running Python version, platform, and additions to builtins.
@@ -453,17 +457,19 @@ class Expr:
     def _to_binop(elements: Sequence[Expr], op: str) -> ExprBinOp:
         if len(elements) == 2:  # noqa: PLR2004
             left, right = elements
-            if isinstance(left, Expr):
-                left = left.modernize()
-            if isinstance(right, Expr):
-                right = right.modernize()
-            return ExprBinOp(left=left, operator=op, right=right)
+            return ExprBinOp(
+                left=left.modernize() if isinstance(left, Expr) else left,
+                operator=op,
+                right=right.modernize() if isinstance(right, Expr) else right,
+            )
 
         left = ExprSubscript._to_binop(elements[:-1], op=op)
         right = elements[-1]
-        if isinstance(right, Expr):
-            right = right.modernize()
-        return ExprBinOp(left=left, operator=op, right=right)
+        return ExprBinOp(
+            left=left,
+            operator=op,
+            right=right.modernize() if isinstance(right, Expr) else right,
+        )
 
 
 @dataclass(eq=True, slots=True)
@@ -1775,10 +1781,6 @@ def _build_yield_from(node: ast.YieldFrom, parent: Module | Class, **kwargs: Any
     return ExprYieldFrom(_build(node.value, parent, **kwargs))
 
 
-class _BuildCallable(Protocol):
-    def __call__(self, node: Any, parent: Module | Class, **kwargs: Any) -> Expr: ...
-
-
 _node_map: dict[type, _BuildCallable] = {
     ast.Attribute: _build_attribute,
     ast.Await: _build_await,
@@ -1811,7 +1813,7 @@ _node_map: dict[type, _BuildCallable] = {
     ast.YieldFrom: _build_yield_from,
 }  # ty:ignore[invalid-assignment]
 
-if sys.version_info >= (3, 14):
+if sys.version_info >= (3, 14):  # pragma: no cover
 
     def _build_interpolation(
         node: ast.Interpolation,

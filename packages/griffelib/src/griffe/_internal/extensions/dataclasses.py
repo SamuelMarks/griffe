@@ -227,7 +227,7 @@ def _apply_recursively(mod_cls: Module | Class, processed: set[str]) -> None:
         for member in mod_cls.members.values():
             if not member.is_alias and member.is_class:
                 _apply_recursively(member, processed)  # ty:ignore[invalid-argument-type]
-    elif isinstance(mod_cls, Module):
+    else:
         for member in mod_cls.members.values():
             if not member.is_alias and (member.is_module or member.is_class):
                 _apply_recursively(member, processed)  # ty:ignore[invalid-argument-type]

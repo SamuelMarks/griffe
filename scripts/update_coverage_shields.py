@@ -83,7 +83,7 @@ def _format_percentage(percentage: float) -> str:
     Returns:
         Formatted string without trailing `.00` if integral, or two decimals.
     """
-    rounded = round(percentage, 2)
+    rounded = float(round(percentage, 2))
     if rounded.is_integer():
         return f"{int(rounded)}"
     return f"{rounded:.2f}"

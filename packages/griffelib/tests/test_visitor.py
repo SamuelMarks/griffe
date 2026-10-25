@@ -513,3 +513,34 @@ def test_parse_pep695_generics() -> None:
         assert type_alias.type_parameters[0].default.name == "str"
         assert isinstance(type_alias.value, Expr)
         assert str(type_alias.value) == "dict[str, T]"
+
+
+def test_visitor_edge_cases(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test visitor edge cases (decorator parse failure, async decorated function, subscript assignment)."""
+    from griffe._internal.agents import visitor as visitor_mod  # noqa: PLC0415
+
+    with temporary_visited_module(
+        """
+        from functools import cache
+
+        @cache
+        async def cached_async():
+            return 1
+
+        class C:
+            def __init__(self):
+                self.items[0] = 1
+        """,
+    ) as mod:
+        assert "async" in mod["cached_async"].labels
+        assert "cached" in mod["cached_async"].labels
+
+    monkeypatch.setattr(visitor_mod, "safe_get_expression", lambda *_a, **_kw: None)
+    with temporary_visited_module(
+        """
+        @dec
+        def f():
+            pass
+        """,
+    ) as mod2:
+        assert mod2["f"].decorators == []

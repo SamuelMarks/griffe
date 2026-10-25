@@ -698,3 +698,479 @@ def test_annotation_resolution() -> None:
         assert module["C.func"].resolve("T") == "module.C[T]"
         with pytest.raises(NameResolutionError):
             module["C.func"].resolve("Y")
+
+
+def test_models_comprehensive_coverage(tmp_path: Path) -> None:
+    """Test remaining model methods, properties, alias proxies, and edge cases."""
+    from pathlib import Path  # noqa: PLC0415
+
+    from griffe._internal.collections import LinesCollection, ModulesCollection  # noqa: PLC0415
+    from griffe._internal.enumerations import Kind, ParameterKind, TypeParameterKind  # noqa: PLC0415
+    from griffe._internal.exceptions import (  # noqa: PLC0415
+        AliasResolutionError,
+        CyclicAliasError,
+        NameResolutionError,
+    )
+    from griffe._internal.expressions import ExprCall, ExprName  # noqa: PLC0415
+    from griffe._internal.git import GitInfo  # noqa: PLC0415
+    from griffe._internal.models import (  # noqa: PLC0415
+        Alias,
+        Attribute,
+        Class,
+        Decorator,
+        Docstring,
+        Function,
+        Module,
+        Parameter,
+        Parameters,
+        TypeAlias,
+        TypeParameter,
+        TypeParameters,
+    )
+
+    # Docstring.source errors and success
+    assert Docstring("hello").lines == ["hello"]
+    with pytest.raises(ValueError, match="without parent"):
+        _ = Docstring("hello").source
+    ns_mod = Module("ns", filepath=[tmp_path / "ns1", tmp_path / "ns2"])
+    with pytest.raises(ValueError, match="namespace package"):
+        _ = Docstring("hello", lineno=1, endlineno=1, parent=ns_mod).source
+    reg_mod = Module("reg", filepath=tmp_path / "reg.py")
+    with pytest.raises(ValueError, match="without line numbers"):
+        _ = Docstring("hello", lineno=None, endlineno=None, parent=reg_mod).source
+
+    # Parameter.__str__, __repr__, __eq__, as_dict
+    p1 = Parameter("p", annotation="int", kind=ParameterKind.positional_only, default="1", docstring=Docstring("p doc"))
+    p_nokind = Parameter("p", annotation="int", kind=None, default="1")
+    assert "[positional-only]" in str(p1)
+    assert str(p_nokind) == "p: int = 1"
+    assert "Parameter(" in repr(p1)
+    assert (p1 == "not_a_param") is False
+    assert p1 == Parameter("p", annotation="int", kind=ParameterKind.positional_only, default="1")
+    assert "docstring" in p1.as_dict(full=True)
+
+    # Parameters __repr__, KeyError on get/del, ValueError on duplicate add, and add success
+    params = Parameters(p1)
+    params.add(Parameter("p2"))
+    assert len(params) == 2
+    assert "Parameters(" in repr(params)
+    with pytest.raises(KeyError, match="not found"):
+        _ = params["missing"]
+    with pytest.raises(KeyError, match="not found"):
+        del params["missing"]
+    with pytest.raises(ValueError, match="already present"):
+        params.add(p1)
+
+    # TypeParameter validation, repr, constraints/bound setters, as_dict, and TypeParameters container
+    with pytest.raises(ValueError, match="mutually exclusive"):
+        TypeParameter("T", kind=TypeParameterKind.type_var, bound="int", constraints=["int", "str"])
+    tp = TypeParameter("T", kind=TypeParameterKind.type_var, constraints=["int", "str"])
+    assert "TypeParameter(" in repr(tp)
+    assert tp.bound is None
+    assert tp.constraints == ("int", "str")
+    tp.constraints = None
+    assert tp.constraints is None
+    tp.bound = "float"
+    assert tp.bound == "float"
+    assert tp.as_dict()["name"] == "T"
+
+    tps = TypeParameters(tp)
+    tps.add(TypeParameter("U", kind=TypeParameterKind.type_var))
+    assert len(tps) == 2
+    assert "TypeParameters(" in repr(tps)
+    assert tps[0] is tp
+    assert tps["T"] is tp
+    with pytest.raises(KeyError, match="not found"):
+        _ = tps["missing"]
+    with pytest.raises(KeyError, match="not found"):
+        del tps["missing"]
+    with pytest.raises(ValueError, match="already present"):
+        tps.add(tp)
+    assert "missing" not in tps
+
+    # Decorator callable_path with ExprCall and string
+    dec_call = Decorator(ExprCall(ExprName("my_dec"), []), lineno=1, endlineno=1)
+    assert dec_call.callable_path == "my_dec"
+    dec_str = Decorator("str_dec", lineno=1, endlineno=1)
+    assert dec_str.callable_path == "str_dec"
+
+    # Object repr, bool, len, git_info, source_link, has_docstrings, is_kind, inherited_members, filter_members
+    mc = ModulesCollection()
+    lc = LinesCollection()
+    repo_dir = tmp_path / "repo"
+    pkg_dir = repo_dir / "pkg"
+    pkg_dir.mkdir(parents=True)
+    init_py = pkg_dir / "__init__.py"
+    lc[init_py] = ["def f():\n", "    pass\n"]
+    git_info = GitInfo(repository=repo_dir, service="github", remote_url="https://github.com/u/r", commit_hash="abc")
+
+    pkg = Module("pkg", filepath=init_py, lines_collection=lc, modules_collection=mc, git_info=git_info)
+    mc["pkg"] = pkg
+    fn_doc = Docstring("fn doc", lineno=1, endlineno=1)
+    fn = Function("f", lineno=1, endlineno=2, parent=pkg, docstring=fn_doc)
+    fn_doc.parent = fn
+    assert fn_doc.source == "def f():\n"
+    pkg["f"] = fn
+    assert repr(fn) == "Function('f', 1, 2)"
+    assert bool(fn) is True
+    assert len(pkg) == 1
+    assert fn.git_info is git_info
+    fn.git_info = git_info
+    assert fn.source_link is not None
+    assert fn.source_link is not None  # cached _source_link branch
+    fn.source_link = "https://custom/link"
+    assert fn.source_link == "https://custom/link"
+    fn.public = True
+    fn.deprecated = "dep"
+    assert fn.as_dict(full=False)["public"] is True
+    assert fn.as_dict(full=False)["deprecated"] == "dep"
+    assert fn.as_dict(full=True)["path"] == "pkg.f"
+
+    # source_link when filepath is not relative to repository or lineno is None
+    outside_mod = Module("out", filepath=tmp_path / "out.py", git_info=git_info)
+    no_line_fn = Function("nl", lineno=None, endlineno=None, parent=pkg)
+    assert outside_mod.source_link is None
+    assert no_line_fn.source_link is None
+
+    # has_docstrings with broken alias and undocumented members
+    undoc_mod = Module("undoc", modules_collection=mc)
+    mc["undoc"] = undoc_mod
+    undoc_mod["broken"] = Alias("broken", "nonexistent.target", parent=undoc_mod)
+    undoc_mod.imports["_priv_imp"] = "pkg.f"
+    priv_imp = Alias("_priv_imp", "pkg.f", parent=undoc_mod)
+    undoc_mod["_priv_imp"] = priv_imp
+
+    class RaisingMember:
+        is_imported = False
+        is_public = True
+
+        @property
+        def has_docstrings(self) -> bool:
+            raise AliasResolutionError(Alias("x", "y", parent=undoc_mod))
+
+    undoc_mod.members["raising_m"] = RaisingMember()  # ty:ignore[invalid-assignment]
+    assert not undoc_mod.has_docstrings
+    del undoc_mod.members["raising_m"]
+    assert pkg.has_docstrings
+
+    # is_kind validation and branches
+    with pytest.raises(ValueError, match="empty set"):
+        fn.is_kind(set())
+    assert fn.is_kind("function")
+    assert fn.is_kind(Kind.FUNCTION)
+    assert fn.is_kind({Kind.FUNCTION, "class"})
+    assert not fn.is_kind({Kind.CLASS, "attribute"})
+
+    # inherited_members on non-Class, Class with empty MRO, and Class with MRO cycle
+    assert fn.inherited_members == {}
+    empty_mro_cls = Class("EmptyMro", parent=pkg)
+    assert empty_mro_cls.inherited_members == {}
+    assert len(empty_mro_cls.parameters) == 0
+    assert not empty_mro_cls.is_attribute
+    assert not empty_mro_cls.is_init_method
+    cyc_a = Class("A", bases=["cyc.B"], parent=undoc_mod)
+    cyc_b = Class("B", bases=["undoc.A"], parent=undoc_mod)
+    undoc_mod["A"] = cyc_a
+    mc["cyc"] = Module("cyc", modules_collection=mc)
+    mc["cyc"]["B"] = cyc_b
+    with pytest.raises(ValueError, match="inheritance cycle detected"):
+        cyc_a.mro()
+    assert cyc_a.inherited_members == {}
+
+    # Object default boolean properties & filter_members
+    assert not fn.is_init_method
+    assert not fn.is_init_module
+    assert not fn.is_package
+    assert not fn.is_subpackage
+    assert not fn.is_namespace_package
+    assert not fn.is_namespace_subpackage
+    assert fn.has_labels()
+    assert pkg.filter_members() == pkg.members
+    assert pkg.filter_members(lambda m: m.name == "f") == {"f": fn}
+
+    # relative_package_filepath for namespace packages and regular submodules under namespace packages
+    ns_top = Module("ns_top", filepath=[tmp_path / "s1" / "ns_top", tmp_path / "s2" / "ns_top"])
+    ns_sub = Module("ns_sub", filepath=[tmp_path / "s2" / "ns_top" / "ns_sub"], parent=ns_top)
+    ns_bad = Module("ns_bad", filepath=[Path("/nonexistent_xyz/ns_bad")], parent=ns_top)
+    reg_under_ns = Module("reg_sub", filepath=tmp_path / "s2" / "ns_top" / "reg_sub.py", parent=ns_top)
+    reg_bad_under_ns = Module("reg_bad", filepath=Path("/nonexistent_xyz/reg_bad.py"), parent=ns_top)
+    assert ns_sub.relative_package_filepath == Path("ns_top/ns_sub")
+    with pytest.raises(ValueError):  # noqa: PT011
+        _ = ns_bad.relative_package_filepath
+    assert reg_under_ns.relative_package_filepath == Path("ns_top/reg_sub.py")
+    with pytest.raises(ValueError):  # noqa: PT011
+        _ = reg_bad_under_ns.relative_package_filepath
+
+    # relative_filepath for namespace package (in cwd vs outside cwd)
+    ns_in_cwd = Module("ns_cwd", filepath=[Path.cwd() / "sub_ns"])
+    assert ns_in_cwd.relative_filepath == Path("sub_ns")
+    with pytest.raises(ValueError, match="is relative to the current working directory"):
+        _ = ns_bad.relative_filepath
+
+    # modules_collection & lines_collection errors, lines on builtin/namespace/missing/no-lineno
+    orphan_fn = Function("orphan")
+    with pytest.raises(ValueError, match="no modules collection"):
+        _ = orphan_fn.modules_collection
+    with pytest.raises(ValueError, match="no lines collection"):
+        _ = orphan_fn.lines_collection
+    builtin_mod = Module("builtin_m", filepath=None, lines_collection=lc)
+    assert builtin_mod.lines == []
+    assert ns_top.lines == []
+    untracked_mod = Module("untracked", filepath=tmp_path / "untracked.py", lines_collection=lc)
+    assert untracked_mod.lines == []
+    assert no_line_fn.lines == []
+    assert pkg.lines == ["def f():\n", "    pass\n"]
+
+    # resolve with TypeParameter (* and **), and nested serialization context
+    fn_tp = Function(
+        "fn_tp",
+        type_parameters=TypeParameters(
+            TypeParameter("Ts", kind=TypeParameterKind.type_var_tuple),
+            TypeParameter("P", kind=TypeParameterKind.param_spec),
+        ),
+        parent=pkg,
+    )
+    assert fn_tp.resolve("Ts") == "pkg.fn_tp[*Ts]"
+    assert fn_tp.resolve("P") == "pkg.fn_tp[**P]"
+
+    sub_pkg = Module("sub_pkg", filepath=pkg_dir / "sub_pkg" / "__init__.py", parent=pkg, lines_collection=lc)
+    pkg["sub_pkg"] = sub_pkg
+    fn_in_pkg = Function("fn2", lineno=1, endlineno=2, parent=pkg)
+    pkg["fn2"] = fn_in_pkg
+    full_dict = pkg.as_dict(full=True)
+    assert full_dict["members"]["fn2"]["source_link"] is not None
+    assert fn_in_pkg.as_dict(full=True)["path"] == "pkg.fn2"
+
+    from griffe._internal.models import _module_serialization_context, _ModuleSerializationContext  # noqa: PLC0415
+
+    tok = _module_serialization_context.set(_ModuleSerializationContext(pkg))
+    try:
+        assert pkg.as_dict(full=True)["path"] == "pkg"
+    finally:
+        _module_serialization_context.reset(tok)
+
+    # Alias proxies and methods
+    cls_target = Class(
+        "MyCls",
+        lineno=1,
+        endlineno=5,
+        bases=["Base"],
+        decorators=[dec_str],
+        keywords={"metaclass": "Meta"},
+        docstring=Docstring("cls doc"),
+        type_parameters=TypeParameters(tp),
+        parent=pkg,
+    )
+    init_method = Function(
+        "__init__",
+        parameters=Parameters(
+            Parameter("self", kind=ParameterKind.positional_only),
+            Parameter("x", kind=ParameterKind.positional_only, default="1"),
+            Parameter("y", kind=ParameterKind.keyword_only),
+        ),
+        returns="None",
+        parent=cls_target,
+    )
+    cls_target["__init__"] = init_method
+    prop_attr = Attribute("prop", value="1", annotation="int", parent=cls_target)
+    prop_attr.setter = Function("prop", parent=cls_target)
+    prop_attr.deleter = Function("prop", parent=cls_target)
+    cls_target["prop"] = prop_attr
+    pkg["MyCls"] = cls_target
+    ta_target = TypeAlias("MyTA", value="int", parent=pkg)
+    pkg["MyTA"] = ta_target
+
+    al_cls = Alias("AlCls", cls_target, lineno=1, endlineno=1, parent=pkg)
+    al_fn = Alias("AlFn", init_method, parent=pkg)
+    al_attr = Alias("AlAttr", prop_attr, parent=pkg)
+    al_mod = Alias("AlMod", pkg, parent=pkg)
+    al_ta = Alias("AlTA", ta_target, parent=pkg)
+    al_broken = Alias("AlBroken", "does.not.exist", lineno=2, endlineno=3, analysis="static", parent=pkg)
+    al_broken.deprecated = "old"
+    al_broken_public = Alias("AlBrokenPub", "does.not.exist", parent=pkg)
+    al_broken_public.public = True
+
+    assert repr(al_cls) == "Alias('AlCls', 'pkg.MyCls')"
+    assert bool(al_cls) is True
+    assert len(al_cls) == 1
+    assert al_cls.has_docstring is True
+    assert al_broken.has_docstring is False
+    assert al_cls.has_docstrings is True
+    assert al_broken.has_docstrings is False
+
+    # Alias.public getter/setter and inherited alias public
+    inh_al = Alias("inh", prop_attr, parent=cls_target, inherited=True)
+    assert inh_al.public is None
+    with pytest.raises(TypeError, match="forbidden"):
+        inh_al.public = True
+    al_cls.public = True
+    assert al_cls.public is True
+
+    # Alias.members and Alias.inherited_members and Alias.as_json
+    base_cls = Class("Base", parent=pkg)
+    base_cls["base_m"] = Attribute("base_m", value="0", parent=base_cls)
+    pkg["Base"] = base_cls
+    cls_target.bases = ["pkg.Base"]
+    assert "prop" in al_cls.members
+    assert "base_m" in al_cls.inherited_members
+    assert al_cls.as_json(full=False)
+    assert al_broken.as_json(full=False)
+    assert al_broken.as_dict(full=True)["deprecated"] == "old"
+    assert al_broken_public.as_dict(full=False)["public"] is True
+
+    # Generic & specific proxies on Alias
+    assert al_cls.git_info is git_info
+    al_cls.git_info = git_info
+    assert al_cls.source_link == cls_target.source_link
+    al_cls.source_link = "https://link"
+    assert al_cls.extra == cls_target.extra
+    assert al_cls.lineno == 1
+    al_cls.lineno = 2
+    assert al_cls.endlineno == 5
+    al_cls.endlineno = 6
+    assert al_cls.docstring is not None
+    al_cls.docstring = Docstring("new doc")
+    assert len(al_cls.type_parameters) == 1
+    al_cls.type_parameters = TypeParameters()
+    assert al_cls.labels == set()
+    assert al_cls.imports == {}
+    assert al_cls.exports is None
+    assert al_cls.aliases
+    assert al_cls.is_kind(Kind.CLASS)
+    assert not al_cls.is_module
+    assert al_cls.is_class
+    assert not al_cls.is_function
+    assert not al_cls.is_attribute
+    assert not al_cls.is_type_alias
+    assert al_ta.is_type_alias
+    assert al_cls.has_labels()
+    assert al_cls.filter_members()
+    assert al_cls.module is pkg
+    assert al_cls.package is pkg
+    assert al_cls.filepath == init_py
+    assert al_cls.relative_filepath
+    assert al_cls.relative_package_filepath
+    assert al_cls.canonical_path == "pkg.MyCls"
+    assert al_cls.lines_collection is lc
+    assert al_cls.lines
+    assert al_cls.source
+    assert al_cls.resolve("prop") == "pkg.MyCls.prop"
+    assert al_mod._filepath == init_py
+    assert al_cls.bases == ["pkg.Base"]
+    assert al_cls.keywords == {"metaclass": "Meta"}
+    assert al_cls.decorators == [dec_str]
+    assert not al_mod.imports_future_annotations
+    assert al_fn.is_init_method
+    assert al_mod.is_init_module
+    assert al_mod.is_package
+    assert not al_mod.is_subpackage
+    assert not al_mod.is_namespace_package
+    assert not al_mod.is_namespace_subpackage
+    assert al_fn.overloads is None
+    al_fn.overloads = []
+    assert len(al_cls.parameters) == 3
+    assert al_fn.returns == "None"
+    al_fn.returns = "int"
+    assert al_attr.setter is not None
+    assert al_attr.deleter is not None
+    assert al_attr.value == "1"
+    al_attr.value = "2"
+    assert al_attr.annotation == "int"
+    al_attr.annotation = "str"
+    assert al_cls.resolved_bases == [base_cls]
+    assert al_cls.mro() == [base_cls]
+    assert al_cls.signature()
+
+    # Alias target setter & CyclicAliasError branches
+    with pytest.raises(CyclicAliasError):
+        al_cls.target = al_cls
+    al_orphan = Alias("OrphanAl", "some.target", parent=pkg)
+    al_orphan.target = cls_target
+    assert al_orphan.resolved
+
+    # Pre-resolved alias cycle in final_target
+    cyc1 = Alias("cyc1", "pkg.cyc2", parent=pkg)
+    cyc2 = Alias("cyc2", "pkg.cyc1", parent=pkg)
+    cyc1._target = cyc2
+    cyc2._target = cyc1
+    with pytest.raises(CyclicAliasError):
+        _ = cyc1.final_target
+
+    # Self-alias and _passed_through in resolve_target
+    self_al = Alias("self_al", "pkg.self_al", parent=pkg)
+    pkg["self_al"] = self_al
+    with pytest.raises(CyclicAliasError):
+        self_al.resolve_target()
+    self_al._passed_through = True
+    try:
+        with pytest.raises(CyclicAliasError):
+            self_al.resolve_target()
+    finally:
+        self_al._passed_through = False
+
+    # Alias without parent resolved in _resolve_target
+    al_no_parent = Alias("np", "pkg.MyCls")
+    al_no_parent._parent = pkg  # give access to modules_collection via property while testing parent check
+    al_no_parent.resolve_target()
+    assert al_no_parent.wildcard is None
+
+    # Module properties on builtin / namespace modules
+    assert repr(builtin_mod) == "Module('builtin_m')"
+    assert not builtin_mod.is_init_module
+    assert not ns_top.is_init_module
+    assert not builtin_mod.is_namespace_package
+    assert not builtin_mod.is_namespace_subpackage
+    ns_sub_under_builtin = Module("ns_b", filepath=None, parent=ns_top)
+    assert not ns_sub_under_builtin.is_namespace_subpackage
+    assert ns_top.as_dict()["filepath"] == [str(tmp_path / "s1" / "ns_top"), str(tmp_path / "s2" / "ns_top")]
+    assert builtin_mod.as_dict()["filepath"] is None
+    assert not fn.is_type_alias
+
+    # inherited_members when child class defines a member overriding base_cls member
+    cls_target["base_m"] = Attribute("base_m", value="1", parent=cls_target)
+    assert "base_m" not in cls_target.inherited_members
+
+    # Class.signature when __init__ is not a Function or missing, and Class.resolved_bases with alias base
+    cls_no_init = Class("NoInit", parent=pkg)
+    assert cls_no_init.signature() == ""
+    cls_attr_init = Class("AttrInit", parent=pkg)
+    cls_attr_init["__init__"] = Attribute("__init__", parent=cls_attr_init)
+    assert cls_attr_init.signature() == ""
+    pkg["BaseAl"] = Alias("BaseAl", base_cls, parent=pkg)
+    cls_al_base = Class("ClsAlBase", bases=["pkg.BaseAl"], parent=pkg)
+    assert cls_al_base.resolved_bases == [base_cls]
+
+    # Function.annotation, Function.resolve in __init__ (parameter, missing member, broken alias, normal member)
+    assert init_method.annotation == "int"
+    assert init_method.resolve("x") == "pkg.MyCls(x)"
+    cls_target["broken_al"] = al_broken
+    assert init_method.resolve("broken_al") == "does.not.exist"
+    cls_target["al_to_broken"] = Alias("al_to_broken", "pkg.AlBroken", parent=cls_target)
+    pkg["AlBroken"] = al_broken
+    assert init_method.resolve("al_to_broken") == "pkg.AlBroken"
+
+    class BrokenLabelsAttr:
+        path = "pkg.MyCls.broken_lbl"
+        is_alias = False
+        is_attribute = True
+
+        @property
+        def labels(self) -> set[str]:
+            raise AliasResolutionError(al_broken)
+
+    cls_target.members["broken_lbl"] = BrokenLabelsAttr()  # ty:ignore[invalid-assignment]
+    assert init_method.resolve("broken_lbl") == "pkg.MyCls.broken_lbl"
+    del cls_target.members["broken_lbl"]
+
+    cls_target["inst_attr"] = Attribute("inst_attr", parent=cls_target)
+    cls_target["inst_attr"].labels.add("instance-attribute")
+    with pytest.raises(NameResolutionError):
+        init_method.resolve("inst_attr")
+    assert init_method.resolve("prop") == "pkg.MyCls.prop"
+
+    # Function.signature with only positional-only parameters
+    pos_only_fn = Function(
+        "pos_fn",
+        parameters=Parameters(Parameter("a", kind=ParameterKind.positional_only)),
+    )
+    assert pos_only_fn.signature() == "pos_fn(a, /)"

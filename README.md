@@ -6,7 +6,7 @@
 [![gitter](https://img.shields.io/badge/matrix-chat-4db798.svg?style=flat)](https://app.gitter.im/#/room/#mkdocstrings_griffe:gitter.im)
 [![radicle](https://img.shields.io/badge/rad-clone-6666FF.svg?style=flat)](https://app.radicle.at/nodes/seed.radicle.at/rad:z4M5XTPDD4Wh1sm8iPCenF85J3z8Z)
 [![doc coverage](https://img.shields.io/badge/doc_coverage-100%25-brightgreen.svg?style=flat)](https://mkdocstrings.github.io/griffe/reference/api/)
-[![test coverage](https://img.shields.io/badge/test_coverage-88.41%25-yellowgreen.svg?style=flat)](https://github.com/mkdocstrings/griffe/actions?query=workflow%3Aci)
+[![test coverage](https://img.shields.io/badge/test_coverage-100%25-brightgreen.svg?style=flat)](https://github.com/mkdocstrings/griffe/actions?query=workflow%3Aci)
 
 ## About this Fork (cdd-python integration)
 

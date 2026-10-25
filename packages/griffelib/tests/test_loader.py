@@ -41,7 +41,7 @@ def test_skip_load_event_traversal_without_hooks(monkeypatch: pytest.MonkeyPatch
     with temporary_pypackage("package", {"__init__.py": "def function(): ..."}) as package:
         loader = GriffeLoader(extensions=Extensions(), search_paths=[package.tmpdir])
 
-        def fail_if_called(_module: object) -> None:
+        def fail_if_called(_module: object) -> None:  # pragma: no cover
             raise AssertionError("load events were fired without hooks")
 
         monkeypatch.setattr(loader, "_fire_load_events", fail_if_called)
@@ -54,7 +54,7 @@ def test_resolve_aliases_defers_caught_error_messages(monkeypatch: pytest.Monkey
         loader = GriffeLoader(search_paths=[package.tmpdir])
         loader.load("package")
 
-        def fail_if_formatted(_error: AliasResolutionError) -> str:
+        def fail_if_formatted(_error: AliasResolutionError) -> str:  # pragma: no cover
             raise AssertionError("caught alias-resolution error was formatted")
 
         monkeypatch.setattr(AliasResolutionError, "_format_message", fail_if_formatted)
@@ -582,3 +582,268 @@ def test_deferred_finder(tmp_path: Path) -> None:
     l1_result = l1.load("ns")
     l2_result = l2.load("ns")
     assert l1_result.as_dict() == l2_result.as_dict()
+
+
+def test_loader_and_load_pypi_edge_cases(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test `GriffeLoader`, `load`, `load_git`, and `load_pypi` edge cases."""
+    from pathlib import Path  # noqa: PLC0415
+    from types import SimpleNamespace  # noqa: PLC0415
+
+    from griffe._internal import loader as loader_mod  # noqa: PLC0415
+    from griffe._internal.exceptions import (  # noqa: PLC0415
+        LoadingError,
+    )
+    from griffe._internal.expressions import ExprName  # noqa: PLC0415
+    from griffe._internal.models import Alias, Attribute, Class, Module  # noqa: PLC0415
+
+    # 1. ModuleNotFoundError when allow_inspection=False and force_inspection=False
+    loader_no_insp = GriffeLoader(search_paths=[tmp_path], allow_inspection=False, force_inspection=False)
+    with pytest.raises(ModuleNotFoundError):
+        loader_no_insp.load("nonexistent_pkg_xyz_999")
+
+    # 2. Dynamic import fallback with empty __path__ (builtin/compiled style) and >1 __path__ (namespace)
+    monkeypatch.setattr(
+        loader_mod,
+        "dynamic_import",
+        lambda *_a, **_kw: SimpleNamespace(__path__=[]),
+    )
+    monkeypatch.setattr(
+        GriffeLoader,
+        "_inspect_module",
+        lambda self, name, *_a, **_kw: Module(name, modules_collection=self.modules_collection),
+    )
+    loader_dyn = GriffeLoader(search_paths=[tmp_path])
+    assert loader_dyn.load("empty_path_mod").name == "empty_path_mod"
+
+    ns_p1 = tmp_path / "nsp1"
+    ns_p2 = tmp_path / "nsp2"
+    ns_p1.mkdir()
+    ns_p2.mkdir()
+    monkeypatch.setattr(
+        loader_mod,
+        "dynamic_import",
+        lambda *_a, **_kw: SimpleNamespace(__path__=[str(ns_p1), str(ns_p2)]),
+    )
+    assert loader_dyn.load("multi_path_mod").name == "multi_path_mod"
+    monkeypatch.undo()
+
+    # 3. LoadingError in load() re-raised with logger.exception
+    bad_syntax_pkg = tmp_path / "bad_syntax_pkg"
+    bad_syntax_pkg.mkdir()
+    (bad_syntax_pkg / "__init__.py").write_text("def broken(:\n", encoding="utf8")
+    loader_err = GriffeLoader(search_paths=[tmp_path])
+    with pytest.raises(LoadingError, match="Syntax error"):
+        loader_err.load("bad_syntax_pkg")
+
+    # 4. _load_module exceptions: ImportError, UnicodeDecodeError, OSError, and compiled module without inspection
+    bad_utf8_file = tmp_path / "bad_utf8.py"
+    bad_utf8_file.write_bytes(b"\xff\xfe")
+    with pytest.raises(LoadingError, match="UnicodeDecodeError"):
+        loader_err._load_module("bad_utf8", bad_utf8_file)
+
+    with pytest.raises(LoadingError, match="OSError"):
+        loader_err._load_module("missing_file", tmp_path / "missing_file.py")
+
+    so_file = tmp_path / "compiled.so"
+    so_file.write_bytes(b"")
+    with pytest.raises(LoadingError, match="Cannot load compiled module"):
+        loader_no_insp._load_module("compiled", so_file)
+
+    # _load_module_path with allow_inspection=True on .so file, and _inspect_module errors
+    loader_err.ignored_modules.add("ignored_mod")
+    with pytest.raises(LoadingError, match="Import error"):
+        loader_err._load_module("ignored_mod", so_file)
+    with pytest.raises(LoadingError, match="Import error"):
+        loader_err._load_module("compiled_nonexistent_so", so_file)
+
+    monkeypatch.setattr(loader_mod, "inspect", lambda *_a, **_kw: (_ for _ in ()).throw(SystemExit(1)))
+    with pytest.raises(ImportError, match="raised a system exit"):
+        loader_err._inspect_module("sys_exit_mod", filepath=bad_syntax_pkg / "__init__.py")
+    monkeypatch.undo()
+
+    # _fire_load_events with nested submodule and all member kinds via load()
+    from griffe._internal.extensions.base import Extension, Extensions  # noqa: PLC0415
+    from griffe._internal.models import Function, TypeAlias  # noqa: PLC0415
+
+    class SubmodHookExt(Extension):
+        def on_module(self, **_kw: object) -> None:
+            pass
+
+    loader_hook = GriffeLoader(search_paths=[tmp_path], extensions=Extensions(SubmodHookExt()))
+    top_m = Module("top_m")
+    top_m["child_m"] = Module("child_m", parent=top_m)
+    top_m["child_c"] = Class("child_c", parent=top_m)
+    top_m["child_f"] = Function("child_f", parent=top_m)
+    top_m["child_a"] = Attribute("child_a", parent=top_m)
+    top_m["child_ta"] = TypeAlias("child_ta", parent=top_m)
+    top_m["child_al"] = Alias("child_al", "top_m.child_a", parent=top_m)
+    loader_hook.modules_collection["top_m"] = top_m
+    loader_hook._post_load(top_m, "top_m")
+
+    # 5. _load_submodule with dot in subpart, Missing __init__ module, LoadingError in submodule, and non-shadowing module
+    parent_mod = Module(
+        "parent_mod", filepath=bad_syntax_pkg / "__init__.py", modules_collection=loader_err.modules_collection
+    )
+    loader_err._load_submodule(parent_mod, ("a.b",), bad_syntax_pkg / "a.b.py")
+    loader_err._load_submodule(parent_mod, ("unimportable_dir", "mod"), bad_syntax_pkg / "unimportable_dir" / "mod.py")
+    loader_err._load_submodule(parent_mod, ("broken",), bad_syntax_pkg / "__init__.py")
+
+    valid_sub = tmp_path / "valid_sub.py"
+    valid_sub.write_text("x = 1\n", encoding="utf8")
+    parent_mod["valid_sub"] = Module("valid_sub", filepath=valid_sub)
+    loader_err._load_submodule(parent_mod, ("valid_sub",), valid_sub)
+
+    # _get_or_create_parent_module with existing parent_module that is not a namespace package
+    parent_mod["subpkg"] = Module("subpkg", filepath=bad_syntax_pkg / "__init__.py")
+    res_parent = loader_err._get_or_create_parent_module(
+        parent_mod,
+        ("subpkg", "leaf"),
+        bad_syntax_pkg / "subpkg" / "__init__.py",
+    )
+    assert res_parent is parent_mod["subpkg"]
+
+    # 6. expand_exports edge cases: already seen, ExprName missing, ExprName already seen, TypeError on None exports, alias submodule
+    m_exp = Module("m_exp", modules_collection=loader_err.modules_collection)
+    loader_err.modules_collection["m_exp"] = m_exp
+    m_other = Module("m_other", modules_collection=loader_err.modules_collection)
+    m_other.exports = None
+    loader_err.modules_collection["m_other"] = m_other
+    m_seen = Module("m_seen", modules_collection=loader_err.modules_collection)
+    m_seen.exports = ["s1"]
+    loader_err.modules_collection["m_seen"] = m_seen
+
+    m_exp.exports = [
+        ExprName("__all__", parent=Module("missing_exp_mod")),
+        ExprName("m_other.__all__"),
+        ExprName("m_seen.__all__"),
+        ExprName("m_seen.__all__"),
+        "own",
+    ]
+    m_exp["sub_seen"] = m_seen
+    m_unseen_sub = Module("m_unseen_sub", parent=m_exp)
+    m_exp["m_unseen_sub"] = m_unseen_sub
+    m_exp["sub_alias"] = Alias("sub_alias", "m_seen", parent=m_exp)
+    loader_err.expand_exports(m_exp, seen={"m_seen", "m_exp.m_seen"})
+
+    # 7. expand_wildcards edge cases
+    m_wc = Module("m_wc", filepath=valid_sub, modules_collection=loader_err.modules_collection)
+    loader_err.modules_collection["m_wc"] = m_wc
+    # Wildcard to external package that fails to load
+    m_wc.set_member("/*", Alias("/*", "nonexistent_wc_pkg_xyz/*", parent=m_wc))
+    m_wc["sub_seen"] = m_seen
+    loader_err.expand_wildcards(m_wc, external=True, seen={"m_seen"})
+
+    # Wildcard to loaded package whose submodule is missing in modules_collection
+    m_wc2 = Module("m_wc", filepath=valid_sub, modules_collection=loader_err.modules_collection)
+    loader_err.modules_collection["m_wc"] = m_wc2
+    m_wc2.set_member("/*", Alias("/*", "m_wc.missing_sub/*", parent=m_wc2))
+    loader_err.expand_wildcards(m_wc2, external=True)
+
+    # Wildcard to target alias that is unresolved or cyclic (raises AliasResolutionError/CyclicAliasError)
+    m_wc3 = Module("m_wc3", filepath=valid_sub, modules_collection=loader_err.modules_collection)
+    loader_err.modules_collection["m_wc3"] = m_wc3
+    m_wc3["target_al"] = Alias("target_al", "m_wc3.target_al", parent=m_wc3)
+    m_wc3.set_member("/*", Alias("/*", "m_wc3.target_al.sub/*", parent=m_wc3))
+    loader_err.expand_wildcards(m_wc3, external=False)
+
+    # Self-alias and lower-lineno non-overwrite and broken alias prev_member in expand_wildcards
+    m_src = Module("m_src", filepath=valid_sub, modules_collection=loader_err.modules_collection)
+    m_src["self_al"] = Alias("self_al", "m_dst.self_al", parent=m_src)
+    m_src["existing"] = Attribute("existing", value="1", lineno=100, parent=m_src)
+    m_src["broken_prev"] = Attribute("broken_prev", value="2", lineno=1, parent=m_src)
+    loader_err.modules_collection["m_src"] = m_src
+
+    m_dst = Module("m_dst", filepath=valid_sub, modules_collection=loader_err.modules_collection)
+    m_dst["existing"] = Alias("existing", "other.x", lineno=50, parent=m_dst)
+    m_dst["broken_prev"] = Alias("broken_prev", "missing.broken", lineno=1, parent=m_dst)
+    m_dst["/*src"] = Alias("/*", "m_src/*", lineno=10, parent=m_dst)
+    loader_err.modules_collection["m_dst"] = m_dst
+    loader_err.expand_wildcards(m_dst, external=False)
+
+    # 8. resolve_module_aliases edge cases (CyclicAliasError, external load failure, already seen class)
+    m_res = Module("m_res", filepath=valid_sub, modules_collection=loader_err.modules_collection)
+    loader_err.modules_collection["m_res"] = m_res
+    c_a = Alias("c_a", "m_res.c_b", parent=m_res)
+    c_b = Alias("c_b", "m_res.c_a", parent=m_res)
+    m_res["c_a"] = c_a
+    m_res["c_b"] = c_b
+    m_res["ext_fail"] = Alias("ext_fail", "nonexistent_ext_pkg_xyz.item", parent=m_res)
+    cls_seen = Class("ClsSeen", parent=m_res)
+    m_res["ClsSeen"] = cls_seen
+    loader_err.resolve_module_aliases(m_res, implicit=True, external=True, seen={"m_res.ClsSeen"})
+
+    # 9. stats() method and load() with store_source=False and resolve_aliases=True
+    assert loader_err.stats() is not None
+    loader_no_src = GriffeLoader(search_paths=[tmp_path], store_source=False)
+    loader_no_src._visit_module("valid_sub", valid_sub)
+    loader_no_src_insp = GriffeLoader(search_paths=[tmp_path], store_source=False, force_inspection=True)
+    loader_no_src_insp._inspect_module("valid_sub", valid_sub)
+
+    loaded_res = loader_mod.load("valid_sub", search_paths=[tmp_path], resolve_aliases=True)
+    assert loaded_res.name == "valid_sub"
+
+    # 10. load_git with Path and str objspec
+    monkeypatch.setattr(loader_mod, "_tmp_worktree", lambda *_a, **_kw: __import__("contextlib").nullcontext(tmp_path))
+    monkeypatch.setattr(loader_mod, "load", lambda spec, **_kw: Module(str(spec)))
+    assert str(tmp_path / "valid_sub.py") in loader_mod.load_git(Path("valid_sub.py")).name
+    assert loader_mod.load_git("valid_sub").name == "valid_sub"
+    monkeypatch.undo()
+
+    # 11. load_pypi edge cases
+    monkeypatch.setattr(loader_mod, "find_spec", lambda _pkg: None)
+    with pytest.raises(RuntimeError, match="Please install Griffe with the 'pypi' extra"):
+        loader_mod.load_pypi("pkg", "pkg", "==1.0")
+    monkeypatch.setattr(loader_mod, "find_spec", lambda _pkg: True)
+
+    import platformdirs  # noqa: PLC0415
+
+    cache_root = tmp_path / "pypi_cache"
+    cache_root.mkdir()
+    monkeypatch.setattr(platformdirs, "user_cache_dir", lambda _name: str(cache_root))
+    monkeypatch.setattr(loader_mod, "load", lambda pkg, **_kw: Module(pkg))
+
+    # Pre-existing cached install_dir with matching package name
+    cached_dir = cache_root / "my-dist==1.0"
+    cached_dir.mkdir()
+    (cached_dir / "my_dist.py").write_text("x = 1\n", encoding="utf8")
+    (cached_dir / "my_dist-1.0.dist-info").mkdir()
+    assert loader_mod.load_pypi("", "my-dist", "==1.0").name == "my_dist"
+    assert loader_mod.load_pypi("my_dist", "my-dist", "==1.0").name == "my_dist"
+
+    # Download via subprocess: failure and success (with existing dest_dir vs new dest_dir)
+    monkeypatch.setattr(
+        loader_mod.subprocess,
+        "run",
+        lambda *_a, **_kw: SimpleNamespace(returncode=1, stdout="pip error"),
+    )
+    with pytest.raises(RuntimeError, match="Could not pip install"):
+        loader_mod.load_pypi("pkg", "fail-dist", ">=1.0")
+
+    def fake_pip_run(cmd: list[str], **_kw: object) -> SimpleNamespace:
+        target = Path(cmd[cmd.index("-t") + 1])
+        target.mkdir(parents=True, exist_ok=True)
+        dist_spec = cmd[-1]
+        if "only-dist-info" in dist_spec:
+            (target / "only_dist_info-1.0.dist-info").mkdir()
+        elif "two-dist-info" in dist_spec:
+            (target / "two_dist_info-1.0.dist-info").mkdir()
+            (target / "extra.dist-info").mkdir()
+        elif "custom-mod" in dist_spec:
+            (target / "custom_mod-1.0.dist-info").mkdir()
+            (target / "actual_pkg_name.py").write_text("x = 1\n", encoding="utf8")
+        else:
+            (target / "my_dist-1.0.dist-info").mkdir()
+            (target / "my_dist.py").write_text("x = 1\n", encoding="utf8")
+        return SimpleNamespace(returncode=0, stdout="ok")
+
+    monkeypatch.setattr(loader_mod.subprocess, "run", fake_pip_run)
+    # Destination `my-dist==1.0` already exists
+    assert loader_mod.load_pypi("my_dist", "my-dist", ">=1.0").name == "my_dist"
+    # Destination does not exist yet + guess package name from files
+    assert loader_mod.load_pypi("", "custom-mod", ">=1.0").name == "actual_pkg_name"
+    # Only 1 file (.dist-info) -> RuntimeError("No package found")
+    with pytest.raises(RuntimeError, match="No package found"):
+        loader_mod.load_pypi("", "only-dist-info", ">=1.0")
+    # Multiple .dist-info files -> StopIteration -> RuntimeError("Could not guess package name")
+    with pytest.raises(RuntimeError, match="Could not guess package name"):
+        loader_mod.load_pypi("", "two-dist-info", ">=1.0")

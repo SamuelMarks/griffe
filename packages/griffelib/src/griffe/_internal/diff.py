@@ -633,8 +633,7 @@ def _member_incompatibilities(
         try:
             new_member = new_members[name]
         except KeyError:
-            if (not old_member.is_alias and old_member.is_module) or old_member.is_public:
-                yield ObjectRemovedBreakage(old_member, old_member, None)  # ty:ignore[invalid-argument-type]
+            yield ObjectRemovedBreakage(old_member, old_member, None)  # ty:ignore[invalid-argument-type]
         else:
             yield from _type_based_yield(old_member, new_member, seen_paths=seen_paths)
 

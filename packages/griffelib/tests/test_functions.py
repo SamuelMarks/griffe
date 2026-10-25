@@ -110,7 +110,7 @@ def test_visit_function_keyword_only_param_with_default() -> None:
 def test_visit_function_syntax_error() -> None:
     """Test functions parameters loading."""
     with pytest.raises(SyntaxError), temporary_visited_module("def f(/, poskw=0): ..."):
-        ...
+        ...  # pragma: no cover
 
 
 def test_visit_function_variadic_params() -> None:

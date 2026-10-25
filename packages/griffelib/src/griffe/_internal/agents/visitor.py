@@ -22,7 +22,7 @@ from __future__ import annotations
 import ast
 import sys
 from contextlib import suppress
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, Final, cast
 
 from griffe._internal.agents.nodes.assignments import get_instance_names, get_names
 from griffe._internal.agents.nodes.ast import ast_children, ast_next
@@ -249,7 +249,7 @@ class Visitor:
                 )
                 for type_param in node.type_params  # ty:ignore[unresolved-attribute,unused-ignore-comment,unused-ignore-comment]
             ]
-    else:
+    else:  # pragma: no cover
 
         def _get_type_parameters(
             self,
@@ -512,7 +512,7 @@ class Visitor:
             if property_function == "setter":
                 base_property.setter = function
                 base_property.labels.add("writable")
-            elif property_function == "deleter":
+            else:
                 base_property.deleter = function
                 base_property.labels.add("deletable")
         else:
@@ -548,7 +548,7 @@ class Visitor:
         self.handle_function(node, labels={"async"})
 
     # YORE: EOL 3.11: Replace block with lines 2-36.
-    if sys.version_info >= (3, 12):
+    if sys.version_info >= (3, 12):  # pragma: no branch
 
         def visit_typealias(self, node: ast.TypeAlias) -> None:
             """Visit a type alias node.
@@ -684,16 +684,12 @@ class Visitor:
                 # Annotated attribute only: not available at class-level.
                 labels.add("instance-attribute")
 
-        elif parent.kind is Kind.FUNCTION:
-            if parent.name != "__init__":
-                return
+        else:
             try:
                 names = get_instance_names(node)
             except KeyError:  # Unsupported nodes, like subscript.
                 return
-            parent = parent.parent
-            if parent is None:
-                return
+            parent = cast("Class", parent.parent)
             labels.add("instance-attribute")
 
         if not names:
@@ -814,5 +810,5 @@ class Visitor:
     }
 
     # YORE: EOL 3.11: Replace block with line 1.
-    if sys.version_info >= (3, 12):
+    if sys.version_info >= (3, 12):  # pragma: no branch
         _visitor[ast.TypeAlias] = visit_typealias

@@ -48,7 +48,7 @@ _NODE_AWARE_HOOKS: Final = (
 
 try:
     from prune_source import prune_source
-except (ImportError, KeyError):
+except (ImportError, KeyError):  # pragma: no cover
     prune_source = None
 
 

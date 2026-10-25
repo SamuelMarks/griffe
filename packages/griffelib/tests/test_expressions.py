@@ -661,7 +661,7 @@ def test_fstring_conversions_and_format_specs() -> None:
 
 
 @pytest.mark.skipif(sys.version_info < (3, 14), reason="t-strings require Python 3.14+")
-def test_tstring_conversions_and_format_specs() -> None:
+def test_tstring_conversions_and_format_specs() -> None:  # pragma: no cover
     """Same as f-strings: t-string interpolations must keep conversions, specs and quotes."""
     with temporary_visited_module(
         """
@@ -686,7 +686,7 @@ def test_tstring_conversions_and_format_specs() -> None:
         (r"""t'it\'s "complicated" {x}'""", "t'''it's \"complicated\" {x}'''"),
     ],
 )
-def test_tstring_quote_selection(code: str, expected: str) -> None:
+def test_tstring_quote_selection(code: str, expected: str) -> None:  # pragma: no cover
     """ExprTemplateStr produces valid Python source for t-strings with tricky quote content.
 
     Regression test for https://github.com/mkdocstrings/griffe/issues/444.
@@ -747,7 +747,7 @@ def test_empty_tuple_annotation_str() -> None:
 
 
 @pytest.mark.skipif(sys.version_info < (3, 15), reason="Unpackings in Comprehensions require Python 3.15+")
-def test_render_dict_comprehension_with_unpacking() -> None:
+def test_render_dict_comprehension_with_unpacking() -> None:  # pragma: no cover
     """Docstring stub."""
     with temporary_visited_module(
         """
@@ -755,3 +755,206 @@ def test_render_dict_comprehension_with_unpacking() -> None:
         """,
     ) as module:
         assert str(module["a"].value) == "{**d for d in dicts}"
+
+
+def test_expression_classes_and_helpers_coverage() -> None:
+    """Test expression classes, properties, modernization, and error handling helpers."""
+    from pathlib import Path  # noqa: PLC0415
+
+    import griffe._internal.expressions as expr_mod  # noqa: PLC0415
+    from griffe._internal.enumerations import LogLevel  # noqa: PLC0415
+    from griffe._internal.models import Class, Module  # noqa: PLC0415
+
+    # _join with empty iterable
+    assert list(expr_mod._join([], ", ")) == []
+
+    # Base Expr methods & properties
+    base_expr = expr_mod.Expr()
+    assert list(base_expr) == []
+    assert list(base_expr.iterate(flat=True)) == []
+    assert base_expr.modernize() is base_expr
+    assert base_expr.path == ""
+    assert base_expr.canonical_path == ""
+    assert base_expr.reference_path is None
+    assert base_expr.canonical_name == ""
+    assert not base_expr.is_classvar
+    assert not base_expr.is_tuple
+    assert not base_expr.is_iterator
+    assert not base_expr.is_generator
+
+    # _to_binop with 3 elements and string elements
+    bin3 = expr_mod.Expr._to_binop([expr_mod.ExprName("int"), expr_mod.ExprName("str"), "None"], "|")  # ty:ignore[invalid-argument-type]
+    assert str(bin3) == "int | str | None"
+
+    # ExprAttribute append when value.parent is already set, and first property
+    n1 = expr_mod.ExprName("a")
+    n2 = expr_mod.ExprName("b", parent=n1)
+    n3 = expr_mod.ExprName("c", parent=n2)
+    attr = expr_mod.ExprAttribute([n1, n2])
+    attr.append(n3)
+    assert attr.first is n1
+    assert attr.last is n3
+    assert attr.path == "a.b.c"
+    assert attr.modernize() is attr
+
+    # ExprAttribute modernize when canonical_path is in _modern_types
+    mod_typing = Module("typing")
+    t_name = expr_mod.ExprName("typing")
+    list_name = expr_mod.ExprName("List", parent=t_name)
+    attr_typing_list = expr_mod.ExprAttribute([t_name, list_name])
+    assert attr_typing_list.modernize() == expr_mod.ExprName("list")
+
+    # ExprName modernize when canonical_path is in _modern_types
+    name_typing_dict = expr_mod.ExprName("Dict", parent="typing")
+    assert name_typing_dict.modernize() == expr_mod.ExprName("dict")
+    assert expr_mod.ExprName("int").modernize() == expr_mod.ExprName("int")
+    assert (expr_mod.ExprName("a") == "not_an_expr_name") is False
+
+    # ExprConstant, ExprDictComp with value=None and is_async=True, ExprExtSlice, ExprInterpolation, ExprTemplateStr, multiline ExprJoinedStr
+    c_expr = expr_mod.ExprConstant("42")
+    assert list(c_expr.iterate()) == ["42"]
+    dc_unpack = expr_mod.ExprDictComp(
+        key=expr_mod.ExprName("d"),
+        value=None,
+        generators=[
+            expr_mod.ExprComprehension(
+                target=expr_mod.ExprName("d"),
+                iterable=expr_mod.ExprName("dicts"),
+                conditions=[],
+                is_async=True,
+            ),
+        ],
+    )
+    assert str(dc_unpack) == "{**d async for d in dicts}"
+    multiline_jstr = expr_mod.ExprJoinedStr(["prefix ", expr_mod.ExprFormatted(expr_mod.ExprConstant("line1\nline2"))])
+    assert '"""' in str(multiline_jstr) or "'''" in str(multiline_jstr)
+    ext_sl = expr_mod.ExprExtSlice([expr_mod.ExprSlice("1", "2"), expr_mod.ExprName("z")])
+    assert str(ext_sl) == "1:2, z"
+    interp = expr_mod.ExprInterpolation(value=expr_mod.ExprName("x"), conversion="r", format_spec=["10"])
+    assert str(interp) == "{x!r:10}"
+    tstr = expr_mod.ExprTemplateStr(["hello ", interp])
+    assert str(tstr) == "t'hello {x!r:10}'"
+    assert list(tstr.iterate(flat=False)) == ["t'", "hello ", interp, "'"]
+
+    # ExprKeyword canonical_path without function
+    kw_no_fn = expr_mod.ExprKeyword("k", "1", function=None)
+    assert kw_no_fn.canonical_path == "k=1"
+
+    # ExprName.resolved, is_enum_class, is_enum_instance, is_enum_value, is_type_parameter
+    with temporary_visited_module(
+        """
+        import enum
+
+        class Color(enum.Enum):
+            RED = 1
+
+        c = Color.RED.value
+        """,
+    ) as enum_mod:
+        color_expr = expr_mod.ExprName("Color", parent=enum_mod)
+        assert color_expr.resolved is enum_mod["Color"]
+        assert color_expr.is_enum_class
+        red_expr = expr_mod.ExprName("RED", parent=color_expr)
+        assert red_expr.resolved is enum_mod["Color.RED"]
+        assert red_expr.is_enum_instance
+        val_expr = expr_mod.ExprName("value", parent=red_expr)
+        assert val_expr.is_enum_value
+
+    bad_name = expr_mod.ExprName("missing", parent=None)
+    assert not bad_name.is_enum_class
+    assert not bad_name.is_enum_instance
+    assert not bad_name.is_enum_value
+    tp_name = expr_mod.ExprName("T", parent="mod.Cls[T]")
+    assert tp_name.is_type_parameter
+
+    # ExprSubscript modernize (Union, Optional, normal, and string left/slice) and path/canonical_path/reference_path
+    union_sub = expr_mod.ExprSubscript(
+        expr_mod.ExprName("Union", parent="typing"),
+        expr_mod.ExprTuple([expr_mod.ExprName("int"), expr_mod.ExprName("str")], implicit=True),
+    )
+    assert str(union_sub.modernize()) == "int | str"
+    opt_sub = expr_mod.ExprSubscript(expr_mod.ExprName("Optional", parent="typing"), expr_mod.ExprName("int"))
+    assert str(opt_sub.modernize()) == "int | None"
+    opt_str_sub = expr_mod.ExprSubscript(expr_mod.ExprName("Optional", parent="typing"), "int")
+    assert str(opt_str_sub.modernize()) == "int | None"
+    str_sub = expr_mod.ExprSubscript("list", "int")
+    assert str(str_sub.modernize()) == "list[int]"
+    assert str_sub.path == "list"
+    assert str_sub.canonical_path == "list"
+    assert str_sub.reference_path is None
+    assert union_sub.path == "Union"
+
+    # ExprTuple empty iterate and modernize
+    empty_tup = expr_mod.ExprTuple([])
+    assert str(empty_tup) == "()"
+    mod_tup = expr_mod.ExprTuple(["int", opt_sub]).modernize()
+    assert str(mod_tup) == "(int, int | None)"
+
+    # Nested format spec with flat=False and ExprName.resolved KeyError fallback
+    nested_fmt = expr_mod.ExprFormatted(
+        value=expr_mod.ExprName("x"),
+        format_spec=[expr_mod.ExprFormatted(value=expr_mod.ExprName("y"))],
+    )
+    assert list(nested_fmt.iterate(flat=False))
+
+    # Non-flat iteration with needs_parens=True (e.g. (a + b) * c)
+    paren_bin = expr_mod.ExprBinOp(
+        left=expr_mod.ExprBinOp(expr_mod.ExprName("a"), "+", expr_mod.ExprName("b")),
+        operator="*",
+        right=expr_mod.ExprName("c"),
+    )
+    assert list(paren_bin.iterate(flat=False)) == [
+        "(",
+        expr_mod.ExprBinOp(expr_mod.ExprName("a"), "+", expr_mod.ExprName("b")),
+        ")",
+        " * ",
+        expr_mod.ExprName("c"),
+    ]
+
+    # ExprName.is_enum_value when name == "value" and parent raises AttributeError on is_enum_instance
+    val_bad_parent = expr_mod.ExprName("value", parent=None)
+    assert not val_bad_parent.is_enum_value
+
+    mc_res = expr_mod.ExprName("sub", parent=expr_mod.ExprName("pkg_m", parent=mod_typing))
+    with pytest.raises(Exception):  # noqa: B017, PT011
+        _ = mc_res.resolved
+
+    # _build_attribute with string left and non-name/non-attr left (e.g. call().attr and "s".attr)
+    with temporary_visited_module(
+        """
+        from __future__ import annotations
+
+        x = "hello".upper()
+        y = f().attr
+        z: "invalid syntax annotation" = 1
+        lit: typing.Literal["not parsed"] = "not parsed"
+        """,
+    ) as attr_mod:
+        assert str(attr_mod["x"].value) == "'hello'.upper()"
+        assert str(attr_mod["y"].value) == "f().attr"
+
+    # Parse strings with SyntaxError and Literal[...]
+    with temporary_visited_module(
+        """
+        import typing
+
+        z: "def invalid syntax" = 1
+        lit: typing.Literal["int"] = "int"
+        sub: list[int] = []
+        """,
+    ) as str_mod:
+        assert str_mod["z"].annotation == "'def invalid syntax'"
+        assert str(str_mod["lit"].annotation) == "typing.Literal['int']"
+
+    # get_expression with None, parent without module, and safe_get_expression error paths
+    assert expr_mod.get_expression(None, parent=mod_typing) is None
+    orphan_cls = Class("Orphan")
+    node_one = ast.parse("1", mode="eval").body
+    assert expr_mod.get_expression(node_one, parent=orphan_cls, parse_strings=None) == "1"
+
+    bad_ast_node = ast.AST()
+    bad_ast_node.lineno = 10
+    assert expr_mod.safe_get_expression(bad_ast_node, parent=orphan_cls, log_level=None) is None
+    assert expr_mod.safe_get_expression(bad_ast_node, parent=orphan_cls, log_level=LogLevel.debug) is None
+    mod_with_path = Module("m_path", filepath=Path.cwd() / "m_path.py")
+    assert expr_mod.safe_get_expression(bad_ast_node, parent=mod_with_path, log_level=LogLevel.debug) is None

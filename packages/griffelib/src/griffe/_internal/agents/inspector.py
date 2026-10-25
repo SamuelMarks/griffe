@@ -59,7 +59,7 @@ if TYPE_CHECKING:
 _TYPING_MODULES: tuple[types.ModuleType, ...]
 try:
     import typing_extensions
-except ImportError:
+except ImportError:  # pragma: no cover
     _TYPING_MODULES = (typing,)
 else:
     _TYPING_MODULES = (typing, typing_extensions)
@@ -572,22 +572,14 @@ class Inspector:
 
         if parent.kind is Kind.MODULE:
             labels.add("module-attribute")
-        elif parent.kind is Kind.CLASS:
+        else:
             labels.add("class-attribute")
-        elif parent.kind is Kind.FUNCTION:
-            if parent.name != "__init__":
-                return
-            parent = parent.parent
-            labels.add("instance-attribute")
 
         try:
             value = repr(node.obj)
         except Exception:  # noqa: BLE001
             value = None
-        try:
-            docstring = self._get_docstring(node)
-        except Exception:  # noqa: BLE001
-            docstring = None
+        docstring = self._get_docstring(node)
 
         attribute = Attribute(
             name=node.name,
@@ -597,10 +589,10 @@ class Inspector:
             analysis="dynamic",
         )
         attribute.labels.update(labels)
-        parent.set_member(node.name, attribute)  # ty:ignore[unresolved-attribute]
+        parent.set_member(node.name, attribute)
 
         if node.name == "__all__":
-            parent.exports = list(node.obj)  # ty:ignore[invalid-assignment]
+            parent.exports = list(node.obj)
         self.extensions.call("on_instance", node=node, obj=attribute, agent=self)
         self.extensions.call("on_attribute_instance", node=node, attr=attribute, agent=self)
 

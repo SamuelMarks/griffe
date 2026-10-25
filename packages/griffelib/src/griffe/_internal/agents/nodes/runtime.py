@@ -35,7 +35,7 @@ if TYPE_CHECKING:
 _TYPING_MODULES: tuple[types.ModuleType, ...]
 try:
     import typing_extensions
-except ImportError:
+except ImportError:  # pragma: no cover
     _TYPING_MODULES = (typing,)
 else:
     _TYPING_MODULES = (typing, typing_extensions)

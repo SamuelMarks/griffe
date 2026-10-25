@@ -169,7 +169,7 @@ def _merge_stubs_members(obj: Module | Class, stubs: Module | Class, *, psd: boo
                     _merge_function_stubs(obj_member, stub_member, psd=psd)  # ty:ignore[invalid-argument-type]
                 elif obj_member.is_attribute:
                     _merge_attribute_stubs(obj_member, stub_member, psd=psd)  # ty:ignore[invalid-argument-type]
-                elif obj_member.is_type_alias:
+                else:
                     _merge_type_alias_stubs(obj_member, stub_member, psd=psd)  # ty:ignore[invalid-argument-type]
         else:
             stub_member.runtime = False

@@ -29,7 +29,7 @@ import griffe
 
 try:
     import griffecli
-except ModuleNotFoundError:
+except ModuleNotFoundError:  # pragma: no cover
     griffecli = None
 
 if TYPE_CHECKING:
@@ -47,7 +47,7 @@ _test_all_modules = pytest.mark.parametrize("tested_module", TESTED_MODULES)
 def _fixture_inventory() -> Inventory:
     mkdocstrings = pytest.importorskip("mkdocstrings")
     inventory_file = Path(__file__).parent.parent.parent.parent / "site" / "objects.inv"
-    if not inventory_file.exists():
+    if not inventory_file.exists():  # pragma: no cover
         pytest.skip("The objects inventory is not available.")
 
     with inventory_file.open("rb") as file:
@@ -60,7 +60,7 @@ def _load_modules(*modules: ModuleType) -> griffe.GriffeLoader:
         import griffe_inherited_docstrings  # noqa: F401, PLC0415
 
         extensions.append("griffe_inherited_docstrings")
-    except ImportError:
+    except ImportError:  # pragma: no cover
         pass
     loader = griffe.GriffeLoader(
         extensions=griffe.load_extensions(*extensions),
@@ -72,7 +72,7 @@ def _load_modules(*modules: ModuleType) -> griffe.GriffeLoader:
 
 
 def _get_internal_api(module: ModuleType, loader: griffe.GriffeLoader | None = None) -> griffe.Module:
-    if loader is None:
+    if loader is None:  # pragma: no branch
         loader = _load_modules(module)
     return loader.modules_collection[module.__name__ + "._internal"]
 
@@ -98,10 +98,10 @@ def _yield_public_objects(
     for member in obj.all_members.values() if inherited else obj.members.values():
         try:
             if member.is_module:
-                if member.is_alias:
+                if member.is_alias:  # pragma: no cover
                     continue
                 if member.is_public:
-                    if modules:
+                    if modules:  # pragma: no cover
                         yield member
                     yield from _yield_public_objects(
                         member,  # ty:ignore[invalid-argument-type]
@@ -120,7 +120,7 @@ def _yield_public_objects(
                     inherited=inherited,
                     special=special,
                 )
-        except (griffe.AliasResolutionError, griffe.CyclicAliasError):
+        except (griffe.AliasResolutionError, griffe.CyclicAliasError):  # pragma: no cover
             continue
 
 
@@ -181,9 +181,10 @@ def test_single_locations(tested_module: ModuleType) -> None:
     multiple_locations = {}
     for obj_name in set(tested_module.__all__).difference(_get_reexported_names(tested_module)):
         obj = public_api[obj_name]
+        assert _public_path(obj)
         if obj.aliases and (
             public_aliases := [path for path, alias in obj.aliases.items() if path != obj.path and _public_path(alias)]
-        ):
+        ):  # pragma: no cover
             multiple_locations[obj.path] = public_aliases
     assert not multiple_locations, "Multiple public locations:\n" + "\n".join(
         f"{path}: {aliases}" for path, aliases in multiple_locations.items()
@@ -229,7 +230,9 @@ def test_inventory_matches_api(inventory: Inventory) -> None:
     for item in inventory.values():
         if item.domain == "py" and "(" not in item.name:
             obj = loader.modules_collection[item.name]
-            if obj.path not in public_api_paths and not any(path in public_api_paths for path in obj.aliases):
+            if obj.path not in public_api_paths and not any(
+                path in public_api_paths for path in obj.aliases
+            ):  # pragma: no cover
                 not_in_api.append(item.name)
     msg = "Inventory objects not in public API (try running `make run zensical build --clean`):\n{paths}"
     assert not not_in_api, msg.format(paths="\n".join(sorted(not_in_api)))

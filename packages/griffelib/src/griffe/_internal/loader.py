@@ -240,7 +240,7 @@ class GriffeLoader:
                 self.extensions.call("on_function", func=member, loader=self)
             elif member.is_attribute:
                 self.extensions.call("on_attribute", attr=member, loader=self)
-            elif member.is_type_alias:
+            else:
                 self.extensions.call("on_type_alias", type_alias=member, loader=self)
             self._fire_load_events(member)  # ty:ignore[invalid-argument-type]
 
@@ -405,6 +405,9 @@ class GriffeLoader:
                 # Try getting the module from which every public object is imported.
                 try:
                     target = self.modules_collection.get_member(member.target_path)  # ty:ignore[unresolved-attribute]
+                    if target.path not in seen:
+                        self.expand_wildcards(target, external=external, seen=seen)
+                    expanded.extend(self._expand_wildcard(member))  # ty:ignore[invalid-argument-type]
                 except KeyError:
                     logger.debug(
                         "Could not expand wildcard import %s in %s: %s not found in modules collection",
@@ -413,17 +416,10 @@ class GriffeLoader:
                         cast("Alias", member).target_path,
                     )
                     continue
+                except (AliasResolutionError, CyclicAliasError) as error:
+                    logger.debug("Could not expand wildcard import %s in %s: %s", member.name, obj.path, error)
+                    continue
 
-                # Recurse into this module, expanding wildcards there before collecting everything.
-                if target.path not in seen:
-                    try:
-                        self.expand_wildcards(target, external=external, seen=seen)
-                    except (AliasResolutionError, CyclicAliasError) as error:
-                        logger.debug("Could not expand wildcard import %s in %s: %s", member.name, obj.path, error)
-                        continue
-
-                # Collect every imported object.
-                expanded.extend(self._expand_wildcard(member))  # ty:ignore[invalid-argument-type]
                 to_remove.append(member.name)
 
             # Recurse in unseen submodules.

@@ -35,13 +35,22 @@ if TYPE_CHECKING:
 def _access_inherited_members(obj: Object | Alias) -> None:
     try:
         is_class = obj.is_class
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001  # pragma: no cover
         return
     if is_class:
         assert obj.inherited_members is not None
     else:
         for cls in obj.classes.values():
             _access_inherited_members(cls)
+
+
+def test_access_inherited_members_helper() -> None:
+    """Exercise `_access_inherited_members` helper."""
+    from griffe import Class, Module  # noqa: PLC0415
+
+    mod = Module("mod")
+    mod["C"] = Class("C", parent=mod)
+    _access_inherited_members(mod)
 
 
 @pytest.fixture(name="stdlib_loader", scope="session")

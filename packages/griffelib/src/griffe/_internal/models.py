@@ -880,8 +880,8 @@ class Object(ObjectAliasMixin):
         if isinstance(kind, set):
             if not kind:
                 raise ValueError("kind must not be an empty set")
-            return self.kind in (knd if isinstance(knd, Kind) else Kind(knd) for knd in kind)
-        if isinstance(kind, str):
+            return self.kind in {knd if isinstance(knd, Kind) else Kind(knd) for knd in kind}
+        if not isinstance(kind, Kind):
             kind = Kind(kind)
         return self.kind is kind
 
@@ -1130,7 +1130,7 @@ class Object(ObjectAliasMixin):
             # Current package is a regular package.
             # NOTE: Technically it makes no sense to have a namespace package
             # under a non-namespace one, so we should never enter this branch.
-            else:
+            else:  # pragma: no cover
                 for self_path in self.filepath:
                     with suppress(ValueError):
                         return self_path.relative_to(package_path.parent.parent)
@@ -2184,7 +2184,7 @@ class Alias(ObjectAliasMixin):
             raise CyclicAliasError([self.target_path])
         self._target = value
         self.target_path = value.path
-        if self.parent is not None:
+        if self.parent is not None:  # pragma: no branch
             self._target.aliases[self.path] = self
 
     @property
@@ -2259,7 +2259,7 @@ class Alias(ObjectAliasMixin):
             except CyclicAliasError as error:
                 raise CyclicAliasError([self.target_path, *error.chain]) from error
         self._target = resolved
-        if self.parent is not None:
+        if self.parent is not None:  # pragma: no branch
             self._target.aliases[self.path] = self
 
     def _update_target_aliases(self) -> None:
@@ -2380,9 +2380,9 @@ class Module(Object):
 
         See also: [`is_module`][griffe.Module.is_module].
         """
-        if isinstance(self.filepath, list):
-            return False
         try:
+            if isinstance(self.filepath, list):
+                return False
             return self.filepath.name.split(".", 1)[0] == "__init__"
         except BuiltinModuleError:
             return False

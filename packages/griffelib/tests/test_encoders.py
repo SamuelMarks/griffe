@@ -205,7 +205,7 @@ def test_encoding_pep695_generics() -> None:
 
 
 # use this function in test_json_schema to ease schema debugging
-def _validate(obj: dict, schema: dict) -> None:
+def _validate(obj: dict, schema: dict) -> None:  # pragma: no cover
     if "members" in obj:
         for member in obj["members"]:
             _validate(member, schema)
@@ -270,3 +270,86 @@ def test_json_schema_for_pep695_generics() -> None:
         with open("docs/schema.json", encoding="utf8") as f:  # noqa: PTH123
             schema = json.load(f)
         validate(data, schema)
+
+
+def test_encoders_edge_cases() -> None:
+    """Test JSON encoder and decoder edge cases (git_info, labels, TypeAlias, default error)."""
+    from griffe._internal.encoders import JSONEncoder, _load_module, json_decoder  # noqa: PLC0415
+
+    with pytest.raises(TypeError):
+        JSONEncoder().default(object())
+
+    git_info_dict = {
+        "repository": "/repo",
+        "service": "github",
+        "remote_url": "https://github.com/u/r",
+        "commit_hash": "abc",
+    }
+
+    members_dict: dict[str, dict[str, object]] = {
+        "C": {
+            "kind": Kind.CLASS,
+            "name": "C",
+            "lineno": 1,
+            "bases": [],
+            "imports": {"os": "os"},
+            "git_info": git_info_dict,
+            "members": {},
+        },
+        "f": {
+            "kind": Kind.FUNCTION,
+            "name": "f",
+            "lineno": 2,
+            "parameters": [],
+            "returns": None,
+            "git_info": git_info_dict,
+        },
+        "a": {
+            "kind": Kind.ATTRIBUTE,
+            "name": "a",
+            "lineno": 3,
+            "git_info": git_info_dict,
+        },
+        "TA": {
+            "kind": Kind.TYPE_ALIAS,
+            "name": "TA",
+            "lineno": 4,
+            "value": "int",
+            "type_parameters": [],
+            "docstring": {"value": "TA doc"},
+            "labels": ["ta_lbl"],
+            "git_info": git_info_dict,
+        },
+        "TA2": {
+            "kind": Kind.TYPE_ALIAS,
+            "name": "TA2",
+            "lineno": 5,
+            "value": "str",
+            "type_parameters": [],
+        },
+    }
+    mod_dict: dict[str, object] = {
+        "kind": Kind.MODULE,
+        "name": "m",
+        "filepath": None,
+        "labels": ["lbl"],
+        "git_info": git_info_dict,
+        "members": members_dict,
+    }
+    loaded = _load_module(
+        {
+            **mod_dict,
+            "members": {k: json_decoder(v) for k, v in members_dict.items()},
+        },
+    )
+    assert isinstance(loaded, Module)
+    assert loaded.git_info is not None
+    assert loaded["C"].git_info is not None
+    assert loaded["f"].git_info is not None
+    assert loaded["a"].git_info is not None
+    assert loaded["TA"].git_info is not None
+    assert "ta_lbl" in loaded["TA"].labels
+
+    # Unknown kind in json_decoder returns dict as is
+    unknown_dict = {"kind": "unknown_kind_xyz"}
+    assert json_decoder(unknown_dict) == unknown_dict

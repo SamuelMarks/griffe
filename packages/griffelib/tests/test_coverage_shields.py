@@ -25,7 +25,7 @@ from pathlib import Path
 import pytest
 
 _ROOT = str(Path(__file__).resolve().parent.parent.parent.parent)
-if _ROOT not in sys.path:
+if _ROOT not in sys.path:  # pragma: no cover
     sys.path.insert(0, _ROOT)
 
 from scripts.update_coverage_shields import (  # noqa: E402

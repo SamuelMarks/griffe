@@ -387,3 +387,232 @@ def test_parsing_dynamic_base_classes(caplog: pytest.LogCaptureFixture) -> None:
     ):
         pass
     assert not caplog.records
+
+
+def test_ast_node_helpers_and_utilities(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test AST navigation helpers, values, exports, parser fallback, and small internal modules."""
+    import ast  # noqa: PLC0415
+    from pathlib import Path  # noqa: PLC0415
+
+    from griffe._internal import c3linear, collections, debug, exceptions, importer, logger, stats  # noqa: PLC0415
+    from griffe._internal.agents import parser as parser_mod  # noqa: PLC0415
+    from griffe._internal.agents.nodes import ast as ast_mod  # noqa: PLC0415
+    from griffe._internal.agents.nodes import exports as exports_mod  # noqa: PLC0415
+    from griffe._internal.agents.nodes import values as values_mod  # noqa: PLC0415
+    from griffe._internal.enumerations import LogLevel  # noqa: PLC0415
+    from griffe._internal.extensions.base import Extensions  # noqa: PLC0415
+    from griffe._internal.models import Alias, Module  # noqa: PLC0415
+
+    # AST navigation helpers
+    tree = compile("x = 1\ny = 2\nz = 3", filename="<>", mode="exec", flags=PyCF_ONLY_AST)
+    assert ast_mod.ast_kind(tree) == "module"
+    children = list(ast_mod.ast_children(tree))
+    assert len(children) == 3
+    assert ast_mod.ast_first_child(tree) is children[0]
+    assert ast_mod.ast_last_child(tree) is children[2]
+    assert ast_mod.ast_next(children[0]) is children[1]
+    assert ast_mod.ast_previous(children[1]) is children[0]
+    assert list(ast_mod.ast_next_siblings(children[0])) == [children[1], children[2]]
+    assert list(ast_mod.ast_previous_siblings(children[2])) == [children[0], children[1]]
+    assert list(ast_mod.ast_siblings(children[1])) == [children[0], children[2]]
+
+    # Custom AST node with missing field, non-AST field, and non-AST element in list field
+    class CustomNode(ast.AST):
+        _fields = ("missing_field", "non_ast", "mixed_list")
+
+    cn = CustomNode()
+    cn.non_ast = 123  # ty:ignore[unresolved-attribute]
+    cn.mixed_list = [123, ast.Load()]  # ty:ignore[unresolved-attribute]
+    assert len(list(ast_mod.ast_children(cn))) == 1
+
+    # Orphan node not in its parent's children
+    orphan = ast.Pass()
+    orphan.parent = tree  # ty:ignore[unresolved-attribute]
+    assert list(ast_mod.ast_previous_siblings(orphan)) == children
+    assert list(ast_mod.ast_next_siblings(orphan)) == []
+    assert list(ast_mod.ast_siblings(orphan)) == children
+
+    with pytest.raises(exceptions.LastNodeError):
+        ast_mod.ast_next(children[2])
+    with pytest.raises(exceptions.LastNodeError):
+        ast_mod.ast_previous(children[0])
+
+    empty_tree = compile("", filename="<>", mode="exec", flags=PyCF_ONLY_AST)
+    with pytest.raises(exceptions.LastNodeError):
+        ast_mod.ast_first_child(empty_tree)
+    with pytest.raises(exceptions.LastNodeError):
+        ast_mod.ast_last_child(empty_tree)
+
+    # Exports edge cases
+    mod = Module("mod", filepath=Path("mod.py"))
+    ann_empty = compile("__all__: list[str]", filename="<>", mode="exec", flags=PyCF_ONLY_AST).body[0]  # ty:ignore[unresolved-attribute]
+    assert exports_mod.get__all__(ann_empty, parent=mod) == []
+
+    call_assign = compile("__all__ = foo()", filename="<>", mode="exec", flags=PyCF_ONLY_AST).body[0]  # ty:ignore[unresolved-attribute]
+    assert exports_mod.safe_get__all__(call_assign, parent=mod, log_level=LogLevel.debug) == []
+
+    monkeypatch.setattr(exports_mod, "get__all__", lambda *_a, **_kw: (_ for _ in ()).throw(ValueError("bad export")))
+    assert exports_mod.safe_get__all__(call_assign, parent=mod, log_level=LogLevel.debug) == []
+    monkeypatch.undo()
+
+    # Values edge cases
+    const_node = compile("'hello'", filename="<>", mode="eval", flags=PyCF_ONLY_AST).body  # ty:ignore[unresolved-attribute]
+    assert values_mod.get_value(const_node) == "'hello'"
+    assert values_mod.get_value(None) is None
+    assert values_mod.safe_get_value(None) is None
+
+    def bad_unparse(_node: object) -> str:
+        raise RuntimeError("unparse failed")
+
+    monkeypatch.setattr(values_mod, "unparse", bad_unparse)
+    assert values_mod.safe_get_value(const_node, filepath=Path("a.py")) is None
+    assert values_mod.safe_get_value(const_node, filepath=None) is None
+    monkeypatch.undo()
+
+    # Parser fallback when prune_source produces invalid syntax
+    monkeypatch.setattr(parser_mod, "prune_source", lambda _code: "def broken(:\n")
+    parsed_mod = parser_mod._compile_module("def f():\n    return 1\n", filename="m.py", extensions=Extensions())
+    assert isinstance(parsed_mod, ast.Module)
+
+    def raise_syntax_err(*_a: object, **_kw: object) -> None:
+        raise SyntaxError("bad syntax")
+
+    with pytest.raises(SyntaxError):
+        parser_mod._compile_module("x = 1", filename="m.py", extensions=Extensions(), compiler=raise_syntax_err)  # ty:ignore[invalid-argument-type]
+    monkeypatch.undo()
+
+    # c3linear edge cases
+    dep = c3linear._Dependency([1, 2])
+    assert dep.head == 1
+    assert list(dep.tail) == [2]
+    empty_dep: c3linear._Dependency[int] = c3linear._Dependency()
+    assert empty_dep.head is None
+
+    class BadLenDep(c3linear._Dependency):
+        def __len__(self) -> int:
+            raise ValueError("bad len")
+
+    assert list(BadLenDep([1]).tail) == []
+
+    dl = c3linear._DependencyList([1, 2], [2])
+    assert len(dl) == 1
+    assert repr(dl)
+    assert len(c3linear._DependencyList()) == 0
+    assert c3linear.c3linear_merge() == []
+    assert c3linear.c3linear_merge([], [1, 2]) == [1, 2]
+
+    # Collections LinesCollection & ModulesCollection
+    lc = collections.LinesCollection()
+    lc[Path("test.py")] = ["a = 1", "b = 2"]
+    assert bool(lc)
+    assert list(lc.keys()) == [Path("test.py")]
+    assert list(lc.values()) == [["a = 1", "b = 2"]]
+    assert list(lc.items()) == [(Path("test.py"), ["a = 1", "b = 2"])]
+    mc = collections.ModulesCollection()
+    mc["mod"] = mod
+    assert bool(mc)
+    assert mc.all_members is mc.members
+
+    # Debug info edge cases
+    assert debug._get_version("nonexistent_dist_xyz_999") == "0.0.0"
+    monkeypatch.setenv("GRIFFE_TEST_VAR", "val123")
+    debug._print_debug_info()
+
+    class FakeImplVersion:
+        major = 3
+        minor = 13
+        micro = 0
+        releaselevel = "alpha"
+        serial = 1
+
+    class FakeImpl:
+        name = "cpython"
+        version = FakeImplVersion()
+
+    monkeypatch.setattr(debug.sys, "implementation", FakeImpl())
+    assert debug._interpreter_name_version() == ("cpython", "3.13.0a1")
+    monkeypatch.delattr(debug.sys, "implementation")
+    assert debug._interpreter_name_version() == ("", "0.0.0")
+    monkeypatch.undo()
+
+    # Exceptions
+    assert str(exceptions.CyclicAliasError(["a.b", "b.a"]))
+    mod_builtin = Module("builtins", filepath=None)
+    alias_builtin = Alias("a", "b", parent=mod_builtin)
+    err_alias = exceptions.AliasResolutionError(alias_builtin)
+    assert str(err_alias)
+    assert str(err_alias)  # Second call uses cached _detailed_message
+
+    # Importer edge cases
+    with importer.sys_path():
+        pass
+    assert importer.dynamic_import("os.path.join") is not None
+    with pytest.raises(ImportError):
+        importer.dynamic_import("os.path.nonexistent_attr_xyz_999")
+    with pytest.raises(ImportError):
+        importer.dynamic_import("nonexistent_pkg_xyz_999.sub")
+
+    # Logger patching and disable context manager
+    log_inst = logger.get_logger("griffe.test_custom")
+    assert logger.get_logger("griffe.test_custom") is log_inst
+    with log_inst.disable():
+        assert log_inst._logger.level == 100
+    logger.patch_loggers(logging.getLogger)
+    assert log_inst._logger.name == "griffe.test_custom"
+
+    # Stats formatting with 0 modules and >0 modules (including builtin and directory filepath)
+    from griffe._internal.models import Attribute  # noqa: PLC0415
+
+    mod_dir = Module("dir_mod", filepath=[Path("a"), Path("b")])
+    mod_dir["alias_mem"] = Alias("alias_mem", "other.x", parent=mod_dir)
+    mod_dir["attr_mem"] = Attribute("attr_mem", value="1", parent=mod_dir)
+    mod_builtin_stat = Module("builtin_mod", filepath=None)
+    mc_dir = collections.ModulesCollection()
+    mc_dir["dir_mod"] = mod_dir
+    mc_dir["builtin_mod"] = mod_builtin_stat
+    loader_dir = type(
+        "DummyLoader",
+        (),
+        {
+            "lines_collection": lc,
+            "modules_collection": mc_dir,
+            "force_inspection": False,
+        },
+    )()
+    st_dir = stats.Stats(loader_dir)  # ty:ignore[invalid-argument-type]
+    st_dir.time_spent_visiting = 1000
+    st_dir.time_spent_inspecting = 1000
+    assert "Time spent visiting" in st_dir.as_text()
+
+    mod_py = Module("py_mod", filepath=Path("py_mod.py"))
+    mc_py = collections.ModulesCollection()
+    mc_py["py_mod"] = mod_py
+    loader_force = type(
+        "DummyLoaderForce",
+        (),
+        {
+            "lines_collection": lc,
+            "modules_collection": mc_py,
+            "force_inspection": True,
+        },
+    )()
+    st_force = stats.Stats(loader_force)  # ty:ignore[invalid-argument-type]
+    st_force.time_spent_visiting = 1000
+    st_force.time_spent_inspecting = 1000
+    assert "Time spent visiting" in st_force.as_text()
+
+    mc_only_py = collections.ModulesCollection()
+    mc_only_py["py_mod"] = mod_py
+    loader_no_insp = type(
+        "DummyLoaderNoInsp",
+        (),
+        {
+            "lines_collection": lc,
+            "modules_collection": mc_only_py,
+            "force_inspection": False,
+        },
+    )()
+    st_no_insp = stats.Stats(loader_no_insp)  # ty:ignore[invalid-argument-type]
+    st_no_insp.time_spent_visiting = 1000
+    st_no_insp.time_spent_inspecting = 0
+    assert "Time spent inspecting" in st_no_insp.as_text()
