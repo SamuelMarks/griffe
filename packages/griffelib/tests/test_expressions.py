@@ -578,7 +578,7 @@ def test_parentheses_preserved(code: str) -> None:
 
 # YORE: EOL 3.11: Remove line.
 @pytest.mark.skipif(sys.version_info < (3, 12), reason="Python less than 3.12 does not have PEP 695 generics")
-def test_resolving_type_parameters() -> None:
+def test_resolving_type_parameters() -> None:  # pragma: no cover
     """Assert type parameters are correctly transformed to their fully-resolved form."""
     with temporary_visited_module(
         """

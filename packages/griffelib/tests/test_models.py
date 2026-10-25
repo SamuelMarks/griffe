@@ -678,7 +678,7 @@ def test_delete_type_parameters() -> None:
 
 # YORE: EOL 3.11: Remove line.
 @pytest.mark.skipif(sys.version_info < (3, 12), reason="Python less than 3.12 does not have PEP 695 generics")
-def test_annotation_resolution() -> None:
+def test_annotation_resolution() -> None:  # pragma: no cover
     """Names are correctly resolved in the annotation scope of an object."""
     with temporary_visited_module(
         """
@@ -925,13 +925,16 @@ def test_models_comprehensive_coverage(tmp_path: Path) -> None:
     fn_tp = Function(
         "fn_tp",
         type_parameters=TypeParameters(
+            TypeParameter("T", kind=TypeParameterKind.type_var),
             TypeParameter("Ts", kind=TypeParameterKind.type_var_tuple),
             TypeParameter("P", kind=TypeParameterKind.param_spec),
         ),
         parent=pkg,
     )
+    assert fn_tp.resolve("T") == "pkg.fn_tp[T]"
     assert fn_tp.resolve("Ts") == "pkg.fn_tp[*Ts]"
     assert fn_tp.resolve("P") == "pkg.fn_tp[**P]"
+    assert TypeAlias("TA_dict", value="int", parent=pkg).as_dict()["value"] == "int"
 
     sub_pkg = Module("sub_pkg", filepath=pkg_dir / "sub_pkg" / "__init__.py", parent=pkg, lines_collection=lc)
     pkg["sub_pkg"] = sub_pkg

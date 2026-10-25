@@ -31,7 +31,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Generator
 
 
-PYTHON_VERSIONS = os.getenv("PYTHON_VERSIONS", "3.11 3.12 3.13 3.14 3.15").split()
+PYTHON_VERSIONS = os.getenv("PYTHON_VERSIONS", "3.10 3.11 3.12 3.13 3.14 3.15").split()
 PYTHON_DEV = "3.16"
 
 _commands = []
@@ -164,7 +164,10 @@ def setup() -> None:
     print("Installing dependencies (default environment)")
     default_venv = Path(".venv")
     if not default_venv.exists():
-        _shell(f"uv venv --python {sys.executable}")
+        python_exe = (
+            sys.executable if sys.version_info >= (3, 10) else (PYTHON_VERSIONS[0] if PYTHON_VERSIONS else "3.10")
+        )
+        _shell(f"uv venv --python {python_exe}")
     _uv_install(default_venv)
 
     if PYTHON_VERSIONS:

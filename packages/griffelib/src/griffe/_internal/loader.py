@@ -24,7 +24,7 @@ import subprocess
 import sys
 import tempfile
 from contextlib import suppress
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from functools import cached_property
 from importlib.util import find_spec
 from pathlib import Path
@@ -690,7 +690,7 @@ class GriffeLoader:
         code = module_path.read_text(encoding="utf-8-sig")
         if self.store_source:
             self.lines_collection[module_path] = code.splitlines(keepends=False)
-        start = datetime.now(tz=UTC)
+        start = datetime.now(tz=timezone.utc)
         module = visit(
             module_name,
             filepath=module_path,
@@ -702,7 +702,7 @@ class GriffeLoader:
             lines_collection=self.lines_collection,
             modules_collection=self.modules_collection,
         )
-        elapsed = datetime.now(tz=UTC) - start
+        elapsed = datetime.now(tz=timezone.utc) - start
         self._time_stats["time_spent_visiting"] += elapsed.microseconds
         return module
 
@@ -712,7 +712,7 @@ class GriffeLoader:
                 raise ImportError(f"Ignored module '{module_name}'")
         if self.store_source and filepath and filepath.suffix in {".py", ".pyi"}:
             self.lines_collection[filepath] = filepath.read_text(encoding="utf-8-sig").splitlines(keepends=False)
-        start = datetime.now(tz=UTC)
+        start = datetime.now(tz=timezone.utc)
         try:
             module = inspect(
                 module_name,
@@ -729,7 +729,7 @@ class GriffeLoader:
             raise ImportError(f"Importing '{module_name}' raised a system exit") from error
         except Exception as error:
             raise ImportError(f"Importing '{module_name}' raised an exception") from error
-        elapsed = datetime.now(tz=UTC) - start
+        elapsed = datetime.now(tz=timezone.utc) - start
         self._time_stats["time_spent_inspecting"] += elapsed.microseconds
         return module
 

@@ -223,7 +223,7 @@ class Visitor:
         )
 
     # YORE: EOL 3.11: Replace block with lines 2-36.
-    if sys.version_info >= (3, 12):
+    if sys.version_info >= (3, 12):  # pragma: no cover
         _type_parameter_kind_map: Final[dict[type[ast.type_param], TypeParameterKind]] = {
             ast.TypeVar: TypeParameterKind.type_var,
             ast.TypeVarTuple: TypeParameterKind.type_var_tuple,
@@ -548,7 +548,7 @@ class Visitor:
         self.handle_function(node, labels={"async"})
 
     # YORE: EOL 3.11: Replace block with lines 2-36.
-    if sys.version_info >= (3, 12):  # pragma: no branch
+    if sys.version_info >= (3, 12):  # pragma: no cover
 
         def visit_typealias(self, node: ast.TypeAlias) -> None:
             """Visit a type alias node.
@@ -810,5 +810,5 @@ class Visitor:
     }
 
     # YORE: EOL 3.11: Replace block with line 1.
-    if sys.version_info >= (3, 12):  # pragma: no branch
+    if sys.version_info >= (3, 12):  # pragma: no cover
         _visitor[ast.TypeAlias] = visit_typealias

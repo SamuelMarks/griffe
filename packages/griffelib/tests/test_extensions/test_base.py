@@ -192,7 +192,7 @@ def test_analysis_events_without_type_aliases() -> None:
 
 # YORE: EOL 3.11: Remove line.
 @pytest.mark.skipif(sys.version_info < (3, 12), reason="Python less than 3.12 does not have PEP 695 type aliases")
-def test_analysis_events() -> None:
+def test_analysis_events() -> None:  # pragma: no cover
     """Test analysis events triggering."""
     extension = AnalysisEventsTest()
     with temporary_visited_module(
@@ -311,7 +311,7 @@ def test_load_events_without_type_aliases() -> None:
 
 # YORE: EOL 3.11: Remove line.
 @pytest.mark.skipif(sys.version_info < (3, 12), reason="Python less than 3.12 does not have PEP 695 type aliases")
-def test_load_events() -> None:
+def test_load_events() -> None:  # pragma: no cover
     """Test load events triggering."""
     extension = LoadEventsTest()
     with temporary_visited_package(
@@ -363,6 +363,12 @@ def test_extension_base_methods_and_loading_errors(tmp_path: Path, monkeypatch: 
     agent = Visitor("m", None, "", None, None, None)  # ty:ignore[invalid-argument-type]
     tree = ast.parse("x = 1\ny = 2")
     node = ast.Pass()
+
+    analysis_ext = AnalysisEventsTest()
+    analysis_ext.on_type_alias_node(node=node, agent=agent)
+    analysis_ext.on_type_alias_instance(node=node, type_alias=ta, agent=agent)
+    load_ext = LoadEventsTest()
+    load_ext.on_type_alias(type_alias=ta, loader=loader)
 
     ext.generic_visit(tree)
 

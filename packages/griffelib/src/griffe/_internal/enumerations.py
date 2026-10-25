@@ -18,10 +18,20 @@
 
 from __future__ import annotations
 
-from enum import StrEnum
+import sys
+
+# YORE: EOL 3.10: Replace block with line 2.
+if sys.version_info >= (3, 11):  # pragma: no cover
+    from enum import StrEnum as _StrEnum
+else:  # pragma: no cover
+    from enum import Enum
+
+    class _StrEnum(str, Enum):
+        def __str__(self) -> str:
+            return str(self.value)
 
 
-class LogLevel(StrEnum):
+class LogLevel(_StrEnum):
     """Enumeration of available log levels."""
 
     trace = "trace"
@@ -40,7 +50,7 @@ class LogLevel(StrEnum):
     """The CRITICAL log level."""
 
 
-class DocstringSectionKind(StrEnum):
+class DocstringSectionKind(_StrEnum):
     """Enumeration of the possible docstring section kinds."""
 
     text = "text"
@@ -79,7 +89,7 @@ class DocstringSectionKind(StrEnum):
     """Admonition block."""
 
 
-class ParameterKind(StrEnum):
+class ParameterKind(_StrEnum):
     """Enumeration of the different parameter kinds."""
 
     positional_only = "positional-only"
@@ -94,7 +104,7 @@ class ParameterKind(StrEnum):
     """Variadic keyword parameter."""
 
 
-class TypeParameterKind(StrEnum):
+class TypeParameterKind(_StrEnum):
     """Enumeration of the different type parameter kinds."""
 
     type_var = "type-var"
@@ -105,7 +115,7 @@ class TypeParameterKind(StrEnum):
     """Parameter specification variable."""
 
 
-class Kind(StrEnum):
+class Kind(_StrEnum):
     """Enumeration of the different object kinds."""
 
     MODULE = "module"
@@ -122,7 +132,7 @@ class Kind(StrEnum):
     """Type aliases."""
 
 
-class ExplanationStyle(StrEnum):
+class ExplanationStyle(_StrEnum):
     """Enumeration of the possible styles for explanations."""
 
     ONE_LINE = "oneline"
@@ -137,7 +147,7 @@ class ExplanationStyle(StrEnum):
     """Explanations as Azure DevOps / Azure Pipelines logging commands."""
 
 
-class BreakageKind(StrEnum):
+class BreakageKind(_StrEnum):
     """Enumeration of the possible API breakages."""
 
     PARAMETER_MOVED = "Positional parameter was moved"
@@ -168,7 +178,7 @@ class BreakageKind(StrEnum):
     """Attribute value was changed."""
 
 
-class Parser(StrEnum):
+class Parser(_StrEnum):
     """Enumeration of the different docstring parsers."""
 
     auto = "auto"
@@ -183,7 +193,7 @@ class Parser(StrEnum):
     """ReST-style docstrings parser."""
 
 
-class ObjectKind(StrEnum):
+class ObjectKind(_StrEnum):
     """Enumeration of the different runtime object kinds."""
 
     MODULE = "module"

@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import ast
+import sys
 from typing import TYPE_CHECKING, Final
 
 if TYPE_CHECKING:
@@ -46,9 +47,13 @@ _NODE_AWARE_HOOKS: Final = (
     "on_alias_instance",
 )
 
-try:
-    from prune_source import prune_source
-except (ImportError, KeyError):  # pragma: no cover
+# YORE: EOL 3.10: Replace block with lines 2-5.
+if sys.version_info >= (3, 11):  # pragma: no cover
+    try:
+        from prune_source import prune_source
+    except (ImportError, KeyError):
+        prune_source = None
+else:  # pragma: no cover
     prune_source = None
 
 

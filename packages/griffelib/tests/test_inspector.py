@@ -323,7 +323,7 @@ def test_inheriting_self_from_parent_class() -> None:
 # YORE: EOL 3.12: Remove block.
 # YORE: EOL 3.11: Remove line.
 @pytest.mark.skipif(sys.version_info < (3, 12), reason="Python less than 3.12 does not have PEP 695 generics")
-def test_inspecting_pep695_generics_without_defaults() -> None:
+def test_inspecting_pep695_generics_without_defaults() -> None:  # pragma: no cover
     """Assert PEP 695 generics are correctly inspected."""
     with temporary_inspected_module(
         """
@@ -372,7 +372,7 @@ def test_inspecting_pep695_generics_without_defaults() -> None:
 
 # YORE: EOL 3.12: Remove line.
 @pytest.mark.skipif(sys.version_info < (3, 13), reason="Python less than 3.13 does not have defaults in PEP 695 generics")  # fmt: skip
-def test_inspecting_pep695_generics() -> None:
+def test_inspecting_pep695_generics() -> None:  # pragma: no cover
     """Assert PEP 695 generics are correctly inspected."""
     with temporary_inspected_module(
         """
@@ -629,6 +629,43 @@ def test_inspector_and_runtime_node_edge_cases(monkeypatch: pytest.MonkeyPatch) 
     bad_syn = BadSyntaxRepr()
     assert inspector_mod._convert_object_to_annotation(bad_syn, parent=res_mod) is bad_syn
     assert inspector_mod._convert_type_to_annotation(int | str, parent=res_mod) is not None
+    assert inspector_mod._convert_type_to_annotation(list[int], parent=res_mod) is not None
+
+    # ObjectNode.kind for type_alias, inspect_type_alias, and _convert_type_parameters
+    ta_kind_node = ObjectNode(object(), "ta_kind", parent=mod_node)
+    ta_kind_node.__dict__["is_type_alias"] = True
+    assert ta_kind_node.kind is ObjectKind.TYPE_ALIAS
+
+    class FakeTypeParam:
+        def __init__(
+            self,
+            name: str,
+            bound: object = None,
+            constraints: tuple[object, ...] = (),
+            default: object = None,
+            *,
+            has_def: bool = False,
+        ) -> None:
+            self.__name__ = name
+            self.__bound__ = bound
+            self.__constraints__ = constraints
+            self.__default__ = default
+            self._has_def = has_def
+
+        def has_default(self) -> bool:
+            return self._has_def
+
+    class FakeTypeAliasObj:
+        __value__ = list[int]
+        __type_params__ = (
+            FakeTypeParam("T1", bound=int, default=str, has_def=True),
+            FakeTypeParam("T2", constraints=(int, str), has_def=False),
+        )
+
+    monkeypatch.setitem(inspector_mod._type_parameter_kind_map, FakeTypeParam, TypeParameterKind.type_var)
+    sub_insp.inspect_type_alias(ObjectNode(FakeTypeAliasObj(), "FakeTA", parent=mod_node))
+    assert "FakeTA" in res_mod.members
+    assert len(res_mod["FakeTA"].type_parameters) == 2
 
     orig_get_origin = typing.get_origin
     monkeypatch.setattr(typing, "get_origin", lambda o: "bad_origin" if o == list[int] else orig_get_origin(o))

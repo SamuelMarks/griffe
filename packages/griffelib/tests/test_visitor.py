@@ -419,7 +419,7 @@ def test_parse_deep_attributes_in__all__() -> None:
 # YORE: EOL 3.12: Remove block.
 # YORE: EOL 3.11: Remove line.
 @pytest.mark.skipif(sys.version_info < (3, 12), reason="Python less than 3.12 does not have PEP 695 generics")
-def test_parse_pep695_generics_without_defaults() -> None:
+def test_parse_pep695_generics_without_defaults() -> None:  # pragma: no cover
     """Assert PEP 695 generics are correctly inspected."""
     with temporary_visited_module(
         """
@@ -468,7 +468,7 @@ def test_parse_pep695_generics_without_defaults() -> None:
 
 # YORE: EOL 3.12: Remove line.
 @pytest.mark.skipif(sys.version_info < (3, 13), reason="Python less than 3.13 does not have defaults in PEP 695 generics")  # fmt: skip
-def test_parse_pep695_generics() -> None:
+def test_parse_pep695_generics() -> None:  # pragma: no cover
     """Assert PEP 695 generics are correctly parsed."""
     with temporary_visited_module(
         """

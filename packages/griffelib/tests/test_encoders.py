@@ -150,7 +150,7 @@ def test_minimal_light_data_is_enough(symbol: str) -> None:
 # YORE: EOL 3.12: Remove block.
 # YORE: EOL 3.11: Remove line.
 @pytest.mark.skipif(sys.version_info < (3, 12), reason="Python less than 3.12 does not have PEP 695 generics")
-def test_encoding_pep695_generics_without_defaults() -> None:
+def test_encoding_pep695_generics_without_defaults() -> None:  # pragma: no cover
     """Test serialization and de-serialization of PEP 695 generics without defaults.
 
     Defaults are only possible from Python 3.13 onwards.
@@ -178,7 +178,7 @@ def test_encoding_pep695_generics_without_defaults() -> None:
 
 # YORE: EOL 3.12: Remove line.
 @pytest.mark.skipif(sys.version_info < (3, 13), reason="Python less than 3.13 does not have defaults in PEP 695 generics")  # fmt: skip
-def test_encoding_pep695_generics() -> None:
+def test_encoding_pep695_generics() -> None:  # pragma: no cover
     """Test serialization and de-serialization of PEP 695 generics with defaults.
 
     Defaults are only possible from Python 3.13 onwards.
@@ -233,7 +233,7 @@ def test_json_schema() -> None:
 # YORE: EOL 3.11: Remove line.
 @pytest.mark.skipif(sys.version_info < (3, 12), reason="Python less than 3.12 does not have PEP 695 generics")
 @pytest.mark.skipif(not Path("docs", "schema.json").exists(), reason="schema.json not available")
-def test_json_schema_for_pep695_generics_without_defaults() -> None:
+def test_json_schema_for_pep695_generics_without_defaults() -> None:  # pragma: no cover
     """Assert that serialized PEP 695 generics without defaults match our JSON schema.
 
     Defaults are only possible from Python 3.13 onwards.
@@ -254,7 +254,7 @@ def test_json_schema_for_pep695_generics_without_defaults() -> None:
 # YORE: EOL 3.12: Remove line.
 @pytest.mark.skipif(sys.version_info < (3, 13), reason="Python less than 3.13 does not have defaults in PEP 695 generics")  # fmt: skip
 @pytest.mark.skipif(not Path("docs", "schema.json").exists(), reason="schema.json not available")
-def test_json_schema_for_pep695_generics() -> None:
+def test_json_schema_for_pep695_generics() -> None:  # pragma: no cover
     """Assert that serialized PEP 695 generics with defaults match our JSON schema.
 
     Defaults are only possible from Python 3.13 onwards.
@@ -285,6 +285,15 @@ def test_encoders_edge_cases() -> None:
         "remote_url": "https://github.com/u/r",
         "commit_hash": "abc",
     }
+    tp_loaded = json_decoder(
+        {
+            "name": "T",
+            "kind": "type-var",
+            "annotation": "int",
+            "constraints": [],
+            "default": "str",
+        },
+    )
 
     members_dict: dict[str, dict[str, object]] = {
         "C": {
@@ -292,6 +301,7 @@ def test_encoders_edge_cases() -> None:
             "name": "C",
             "lineno": 1,
             "bases": [],
+            "type_parameters": [tp_loaded],
             "imports": {"os": "os"},
             "git_info": git_info_dict,
             "members": {},
@@ -300,6 +310,7 @@ def test_encoders_edge_cases() -> None:
             "kind": Kind.FUNCTION,
             "name": "f",
             "lineno": 2,
+            "type_parameters": [tp_loaded],
             "parameters": [],
             "returns": None,
             "git_info": git_info_dict,
@@ -315,7 +326,7 @@ def test_encoders_edge_cases() -> None:
             "name": "TA",
             "lineno": 4,
             "value": "int",
-            "type_parameters": [],
+            "type_parameters": [tp_loaded],
             "docstring": {"value": "TA doc"},
             "labels": ["ta_lbl"],
             "git_info": git_info_dict,

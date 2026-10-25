@@ -148,7 +148,7 @@ def test_cpython_compiles_untouched_source_when_native_declines(monkeypatch: pyt
 
 
 @pytest.mark.skipif(parser_module.prune_source is None, reason="prune-source is not installed")
-def test_native_and_cpython_visitors_are_equivalent(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_native_and_cpython_visitors_are_equivalent(monkeypatch: pytest.MonkeyPatch) -> None:  # pragma: no cover
     """Produce the same public model from the native and compatibility parser paths."""
     source = dedent(
         '''
