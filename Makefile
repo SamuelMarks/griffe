@@ -15,6 +15,7 @@ actions = \
 	check \
 	check-api \
 	check-docs \
+	check-format \
 	check-quality \
 	check-security \
 	check-types \

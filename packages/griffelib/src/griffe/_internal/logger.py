@@ -34,10 +34,17 @@ if TYPE_CHECKING:
 
 
 class Logger:
+    """A wrapper around the standard Python logger."""
+
     _default_logger: Any = logging.getLogger
     _instances: ClassVar[dict[str, Logger]] = {}
 
     def __init__(self, name: str) -> None:
+        """Initialize the logger wrapper.
+
+        Parameters:
+            name: The logger name.
+        """
         # Default logger that can be patched by third-party.
         self._logger = self.__class__._default_logger(name)
 

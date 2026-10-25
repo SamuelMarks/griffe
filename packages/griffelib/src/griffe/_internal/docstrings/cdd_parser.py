@@ -28,6 +28,7 @@ if TYPE_CHECKING:
 
 T = TypeVar("T", DocstringParameter, DocstringReturn)
 CddDocstringFormat = Literal["rest", "numpydoc", "google"]
+"""Supported docstring formats for cdd-python."""
 
 
 class CddOptions(TypedDict, total=False):
@@ -163,8 +164,11 @@ def parse_cdd(
 
 
 parse_google = parse_cdd
+"""Parse a Google-style docstring using cdd-python."""
 parse_numpy = parse_cdd
+"""Parse a Numpy-style docstring using cdd-python."""
 parse_sphinx = parse_cdd
+"""Parse a Sphinx-style docstring using cdd-python."""
 
 
 def griffe_param_to_ir_param(
@@ -319,6 +323,7 @@ def emit_sphinx(
 
 
 emit_rest = emit_sphinx
+"""Emit a ReST-style docstring using cdd-python."""
 
 
 __all__ = [

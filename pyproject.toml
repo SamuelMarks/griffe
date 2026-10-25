@@ -12,8 +12,12 @@ license = "ISC"
 license-files = ["LICENSE"]
 readme = "README.md"
 requires-python = ">=3.11"
+dependencies = [
+    "colorama>=0.4",
+    "python-cdd>=0.0.99rc46",
+]
 keywords = ["api", "signature", "breaking-changes", "static-analysis", "dynamic-analysis"]
-dynamic = ["version", "dependencies", "optional-dependencies"]
+dynamic = ["version"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
@@ -47,6 +51,14 @@ Discussions = "https://github.com/mkdocstrings/griffe/discussions"
 Gitter = "https://gitter.im/mkdocstrings/griffe"
 Funding = "https://github.com/sponsors/pawamoy"
 
+[project.optional-dependencies]
+# The 'faster' extra installs the Rust/Ruff parser accelerator. Griffe automatically falls back to
+# CPython's parser when the accelerator is unavailable or an extension needs concrete AST nodes.
+faster = ["prune-source>=0.1.6"]
+# The 'pypi' extra provides dependencies needed for the load_pypi functionality
+# to download and inspect packages from PyPI.
+pypi = ["pip>=24.0", "platformdirs>=4.2", "wheel>=0.42"]
+
 [project.scripts]
 griffe = "griffecli:main"
 
@@ -58,17 +70,6 @@ source = "code"
 path = "scripts/get_version.py"
 expression = "get_version()"
 
-[tool.hatch.metadata.hooks.uv-dynamic-versioning]
-# Dependencies are dynamically versioned; {{version}} is substituted at build time.
-# This ensures griffe, griffelib, and griffecli versions are always 1:1.
-dependencies = ["griffelib=={{version}}", "griffecli=={{version}}"]
-
-[tool.hatch.metadata.hooks.uv-dynamic-versioning.optional-dependencies]
-# The 'faster' extra re-exports griffelib[faster].
-faster = ["griffelib[faster]=={{version}}"]
-# The 'pypi' extra re-exports griffelib[pypi] for backward compatibility.
-pypi = ["griffelib[pypi]=={{version}}"]
-
 [tool.hatch.build]
 # Include as much as possible in the source distribution, to help redistributors.
 ignore-vcs = true
@@ -78,6 +79,7 @@ exclude = [".github"]
 include = [
     "/config",
     "/docs",
+    "/packages",
     "/scripts",
     "/share",
     "/tests",
@@ -91,7 +93,10 @@ include = [
 # Manual pages can be included in the wheel.
 # Depending on the installation tool, they will be accessible to users.
 # pipx supports it, uv does not yet, see https://github.com/astral-sh/uv/issues/4731.
-bypass-selection = true
+packages = [
+    "packages/griffelib/src/griffe",
+    "packages/griffecli/src/griffecli",
+]
 artifacts = ["share/**/*"]
 
 [dependency-groups]
@@ -104,6 +109,7 @@ ci = [
     "duty>=1.9",
     "griffe-inherited-docstrings>=1.1.2",
     "jsonschema>=4.18",
+    "pre-commit>=4.0",
     "prune-source>=0.1.6",
     "pysource-codegen>=0.7",
     "pysource-minimize>=0.10",

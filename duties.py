@@ -412,6 +412,22 @@ def format(ctx: Context) -> None:
     ctx.run(tools.ruff.format(*PY_SRC_LIST, config="config/ruff.toml"), title="Formatting code")
 
 
+@duty(nofail=PY_VERSION == PY_DEV)
+def check_format(ctx: Context) -> None:
+    """Check if the code is correctly formatted.
+
+    ```bash
+    make check-format
+    ```
+
+    Check code formatting with [Ruff](https://astral.sh/ruff).
+    """
+    ctx.run(
+        tools.ruff.format(*PY_SRC_LIST, config="config/ruff.toml", check=True),
+        title=_pyprefix("Checking code formatting"),
+    )
+
+
 @duty
 def build(ctx: Context) -> None:
     """Build source and wheel distributions.
@@ -507,6 +523,7 @@ def coverage(ctx: Context) -> None:
     ctx.run(tools.coverage.combine(), nofail=True)
     ctx.run(tools.coverage.report(rcfile="config/coverage.ini"), capture=False)
     ctx.run(tools.coverage.html(rcfile="config/coverage.ini"))
+    ctx.run(tools.coverage.json(rcfile="config/coverage.ini"))
 
 
 @duty(nofail=PY_VERSION == PY_DEV)

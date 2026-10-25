@@ -78,7 +78,7 @@ def _interpreter_name_version() -> tuple[str, str]:
     return "", "0.0.0"
 
 
-def _get_version(dist: str = "griffelib") -> str:
+def _get_version(dist: str = "griffe") -> str:
     """Get version of the given distribution.
 
     Parameters:

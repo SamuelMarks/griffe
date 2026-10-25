@@ -27,6 +27,14 @@ ParametersType = list[tuple[str, ast.AST | None, ParameterKind, str | ast.AST | 
 
 
 def get_parameters(node: ast.arguments) -> ParametersType:
+    """Extract parameters from an AST arguments node.
+
+    Parameters:
+        node: The AST arguments node.
+
+    Returns:
+        A list of tuples containing parameter name, annotation, kind, and default value.
+    """
     parameters: ParametersType = []
 
     # Python stores positional-only and positional-or-keyword arguments in separate lists,

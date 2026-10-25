@@ -1,0 +1,44 @@
+repos:
+  - repo: local
+    hooks:
+      - id: auto-format
+        name: Auto-format code
+        entry: uv run --no-sync duty format
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: check-format
+        name: Check code formatting
+        entry: uv run --no-sync duty check-format
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: lint
+        name: Lint and type-check code
+        entry: uv run --no-sync duty check-quality check-types
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: build
+        name: Build distributions
+        entry: uv run --no-sync duty build
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: test
+        name: Run tests
+        entry: uv run --no-sync duty test coverage
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: update-coverage-shields
+        name: Update doc and test coverage shields in README.md
+        entry: uv run --no-sync python scripts/update_coverage_shields.py
+        language: system
+        pass_filenames: false
+        always_run: true

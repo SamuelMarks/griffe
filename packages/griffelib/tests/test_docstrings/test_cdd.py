@@ -119,7 +119,9 @@ def test_parse_with_parent(parse_rest: ParserType) -> None:
 
 def test_ir_to_griffe_branches() -> None:
     """Test all branches of `ir_to_griffe` and `ir_param_to_griffe_param`."""
-    empty_sections = ir_to_griffe({"name": None, "type": "static", "doc": None, "params": OrderedDict(), "returns": None})
+    empty_sections = ir_to_griffe(
+        {"name": None, "type": "static", "doc": None, "params": OrderedDict(), "returns": None}
+    )
     assert empty_sections == []
 
     no_doc_sections = ir_to_griffe(
@@ -366,4 +368,3 @@ def test_emit_cdd() -> None:
     sphinx_out = emit_sphinx(doc)
     assert ":param foo:" in sphinx_out
     assert emit_rest(doc) == sphinx_out
-

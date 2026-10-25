@@ -45,6 +45,7 @@ parsers: dict[Parser, Callable[[Docstring], list[DocstringSection]]] = {
     Parser.numpy: parse_cdd,
     Parser.rest: parse_cdd,
 }
+"""Mapping of docstring parser enum values to parser callables."""
 
 
 def parse(

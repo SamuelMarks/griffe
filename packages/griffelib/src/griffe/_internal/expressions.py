@@ -1918,26 +1918,34 @@ def safe_get_expression(
 
 _msg_format = "{path}:{lineno}: Failed to get %s expression from {node_class}: {error}"
 get_annotation = partial(get_expression, parse_strings=None)
+"""Build a resolvable annotation expression from an AST node."""
 safe_get_annotation = partial(
     safe_get_expression,
     parse_strings=None,
     msg_format=_msg_format % "annotation",
 )
+"""Safely build a resolvable annotation expression from an AST node."""
 get_base_class = partial(get_expression, parse_strings=False)
+"""Build a resolvable base class expression from an AST node."""
 safe_get_base_class = partial(
     safe_get_expression,
     parse_strings=False,
     msg_format=_msg_format % "base class",
 )
+"""Safely build a resolvable base class expression from an AST node."""
 get_class_keyword = partial(get_expression, parse_strings=False)
+"""Build a resolvable class keyword expression from an AST node."""
 safe_get_class_keyword = partial(
     safe_get_expression,
     parse_strings=False,
     msg_format=_msg_format % "class keyword",
 )
+"""Safely build a resolvable class keyword expression from an AST node."""
 get_condition = partial(get_expression, parse_strings=False)
+"""Build a resolvable condition expression from an AST node."""
 safe_get_condition = partial(
     safe_get_expression,
     parse_strings=False,
     msg_format=_msg_format % "condition",
 )
+"""Safely build a resolvable condition expression from an AST node."""

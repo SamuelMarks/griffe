@@ -18,6 +18,7 @@
 
 # Get current project version from Git tags or changelog.
 
+import os
 import re
 from contextlib import suppress
 from pathlib import Path
@@ -36,12 +37,15 @@ _default_scm_version = SCMVersion(Version("0.0.0"), None, False, None, None)  # 
 
 
 def get_version() -> str:
+    if bypass := (os.environ.get("UV_DYNAMIC_VERSIONING_BYPASS") or os.environ.get("PDM_BUILD_SCM_VERSION")):
+        return bypass
     scm_version = get_version_from_scm(_root) or _default_scm_version
-    if scm_version.version <= Version("0.1"):  # Missing Git tags?
-        with suppress(OSError, StopIteration):  # noqa: SIM117
-            with _changelog.open("r", encoding="utf8") as file:
-                match = next(filter(None, map(_changelog_version_re.match, file)))
-                scm_version = scm_version._replace(version=Version(match.group(1)))
+    with suppress(OSError, StopIteration):  # noqa: SIM117
+        with _changelog.open("r", encoding="utf8") as file:
+            match = next(filter(None, map(_changelog_version_re.match, file)))
+            changelog_version = Version(match.group(1))
+            if scm_version.version < changelog_version:
+                scm_version = SCMVersion(changelog_version, None, False, None, None)  # noqa: FBT003
     return default_version_formatter(scm_version)
 
 
